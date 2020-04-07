@@ -44,12 +44,6 @@ robot_points = [
     (ROBOT_RADIUS * np.cos(-a), ROBOT_RADIUS * np.sin(-a)) for a in robot_angles
 ]
 
-capture = False
-capture_ball_body = None
-capture_robot_body = None
-capture_anchor = None
-joint = None
-
 class CollisionDetector(b2ContactListener):
     """
     A collision detector to keep track of when the robot intercepts the ball
@@ -60,30 +54,26 @@ class CollisionDetector(b2ContactListener):
         self.env = env
 
     def BeginContact(self, contact: b2Contact):
-        if contact.touching:
-            a_id = contact.fixtureA.body.userData["id"]
-            b_id = contact.fixtureB.body.userData["id"]
+        has_ball = contact.fixtureA.body == self.env.ball or contact.fixtureB.body == self.env.ball
+        has_dribbler_sense = contact.fixtureA == self.env.dribbler_sense or contact.fixtureB == self.env.dribbler_sense
+        has_robot = contact.fixtureA.body == self.env.robot or contact.fixtureB.body == self.env.robot
 
-            if a_id == 0 and b_id == 1:  # a is ball, b is robot
-                ball_fixture: b2Fixture = contact.fixtureA
-                robot_fixture: b2Fixture = contact.fixtureB
-            elif a_id == 1 and b_id == 0:
-                ball_fixture: b2Fixture = contact.fixtureB
-                robot_fixture: b2Fixture = contact.fixtureA
+        if has_ball and has_robot:
+            if has_dribbler_sense:
+                env.dribbling = True
             else:
-                return
-
-            if robot_fixture.userData is not None:
-                global capture, capture_ball_body, capture_robot_body, capture_anchor
-                capture = True
-                manifold: Box2D.b2Manifold = contact.worldManifold
-                capture_anchor = manifold.points[0]
-                capture_ball_body = ball_fixture.body
-                capture_robot_body = robot_fixture.body
-                print("Contact with kicker!")
+                env.can_kick = True
 
     def EndContact(self, contact):
-        pass
+        has_ball = contact.fixtureA.body == self.env.ball or contact.fixtureB.body == self.env.ball
+        has_dribbler_sense = contact.fixtureA == self.env.dribbler_sense or contact.fixtureB == self.env.dribbler_sense
+        has_robot = contact.fixtureA.body == self.env.robot or contact.fixtureB.body == self.env.robot
+
+        if has_ball and has_robot:
+            if has_dribbler_sense:
+                env.dribbling = False
+            else:
+                env.can_kick = False
 
 
 class VelocitySpace(spaces.Space):
@@ -118,6 +108,9 @@ class RoboCup(gym.Env, EzPickle):
         self.reward = 0.0
         self.prev_reward = 0.0
         self.verbose = verbose
+
+        self.dribbling = False
+        self.can_kick = False
 
         self.action_space = spaces.Box(
             np.array([-1.0, -1.0, -1.0]),
@@ -214,6 +207,17 @@ class RoboCup(gym.Env, EzPickle):
             restitution=0.1,
             userData={"kicker": True}
         )
+        # Dribbler sense
+        self.dribbler_sense = self.robot.CreatePolygonFixture(
+            vertices=[
+                (ROBOT_RADIUS + 0.00, 0.06),
+                (ROBOT_RADIUS + 0.0, -0.06),
+                (0, -0.06),
+                (0, 0.06)
+            ],
+            restitution=0.1,
+            isSensor=True
+        )
 
         self.robot.linearVelocity[0] = float(self.state[0][1][0])
         self.robot.linearVelocity[1] = float(self.state[0][1][1])
@@ -280,26 +284,22 @@ class RoboCup(gym.Env, EzPickle):
 
         self._applyBallFriction()
 
-        global capture, capture_ball_body, capture_robot_body, capture_anchor, joint
-
-        if capture:
-            print("Creating weld joint!")
-            joint_def = b2WeldJointDef(bodyA=capture_robot_body, bodyB=capture_ball_body, anchor=capture_anchor)
-            joint = self.world.CreateJoint(joint_def)
-            capture = False
+        if self.dribbling:
+            # Apply force on the ball towards the center of the robot
+            dribble_vec = self.robot.position - self.ball.position
+            dribble_force = dribble_vec / np.sqrt(dribble_vec[0] ** 2 + dribble_vec[1] ** 2) * 5e-3
+            self.ball.ApplyForce(dribble_force, self.ball.worldCenter, True)
+            self.robot.ApplyForce(-dribble_force, self.robot.worldCenter, True)
 
         step_reward = 0
         done = False
         return self.state, step_reward, done, {}
 
     def shoot(self):
-        global joint
-        if joint is not None:
-            shoot_magnitude = 0.1
-            shoot_force = [shoot_magnitude * np.cos(self.robot.angle), shoot_magnitude * np.sin(self.robot.angle)]
-            self.world.DestroyJoint(joint)
-            joint = None
-            self.ball.ApplyForce(shoot_force, self.robot.worldCenter, True)
+        if self.can_kick:
+            shoot_magnitude = 0.003
+            shoot_impulse = [shoot_magnitude * np.cos(self.robot.angle), shoot_magnitude * np.sin(self.robot.angle)]
+            self.ball.ApplyLinearImpulse(shoot_impulse, self.robot.worldCenter, True)
 
     def reset(self):
         self._destroy()
