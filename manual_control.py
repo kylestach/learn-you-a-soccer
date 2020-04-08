@@ -44,7 +44,7 @@ def main():
     restart = False
     env = RoboCup()
 
-    force = [0, 0, 0, 0]
+    force = [0.0, 0.0, 0.0, 0.0]
 
     def key_press(k, mod):
         nonlocal restart, force
