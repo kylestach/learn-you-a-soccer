@@ -10,6 +10,7 @@ from gym.envs.box2d.car_dynamics import Car
 from gym.utils import colorize, seeding, EzPickle
 
 import numpy as np
+import time
 
 WINDOW_W = 600
 WINDOW_H = 900
@@ -43,6 +44,8 @@ robot_angles = list(np.linspace(
 robot_points = [
     (ROBOT_RADIUS * np.cos(-a), ROBOT_RADIUS * np.sin(-a)) for a in robot_angles
 ]
+
+KICK_THRESHOLD = 0.5e-3
 
 class CollisionDetector(b2ContactListener):
     """
@@ -109,12 +112,9 @@ class RoboCup(gym.Env, EzPickle):
         self.prev_reward = 0.0
         self.verbose = verbose
 
-        self.dribbling = False
-        self.can_kick = False
-
         self.action_space = spaces.Box(
-            np.array([-1.0, -1.0, -1.0]),
-            np.array([1.0, 1.0, 1.0]),
+            np.array([-3.0, -3.0, -3.0, 0]),
+            np.array([3.0, 3.0, 3.0, 2.5e-3]),
             dtype=np.float32
         )
 
@@ -171,7 +171,7 @@ class RoboCup(gym.Env, EzPickle):
             "id": 0
         }
         self.ball = self.world.CreateDynamicBody(
-            position=(float(self.state[1][0][0]), float(self.state[1][0][1])),
+            position=(float(self.state[1][0][0]) * 0.3, float(self.state[1][0][1]) * 0.3),
             userData=ball_data
         )
         self.ball.CreateCircleFixture(
@@ -180,8 +180,8 @@ class RoboCup(gym.Env, EzPickle):
             restitution=0.2
         )
 
-        self.ball.linearVelocity[0] = float(self.state[1][1][0])
-        self.ball.linearVelocity[1] = float(self.state[1][1][1])
+        self.ball.linearVelocity[0] = float(self.state[1][1][0]) * 0.5
+        self.ball.linearVelocity[1] = float(self.state[1][1][1]) * 0.5
 
         ball_data = {
             "id": 1
@@ -221,8 +221,8 @@ class RoboCup(gym.Env, EzPickle):
         self.robot.linearVelocity[0] = float(self.state[0][1][0])
         self.robot.linearVelocity[1] = float(self.state[0][1][1])
         self.robot.angularVelocity = float(self.state[0][1][2])
-        self.robot.linearDamping = 10
-        self.robot.angularDamping = 10
+        self.robot.linearDamping = 3
+        self.robot.angularDamping = 5
         self.robot.fixedRotation = False
 
 
@@ -283,6 +283,18 @@ class RoboCup(gym.Env, EzPickle):
 
         self._applyBallFriction()
 
+        self.robot.ApplyForce(
+            [self.robot.mass * action[0], self.robot.mass * action[1]],
+            self.robot.worldCenter, True)
+        self.robot.ApplyTorque(self.robot.inertia * action[2], True)
+
+        self.kick_cooldown += 1
+        if self.can_kick and self.kick_cooldown > 30 and action[3] > KICK_THRESHOLD:
+            self.kick_cooldown = 0
+            shoot_magnitude = action[3]
+            shoot_impulse = [shoot_magnitude * np.cos(self.robot.angle), shoot_magnitude * np.sin(self.robot.angle)]
+            self.ball.ApplyLinearImpulse(shoot_impulse, self.robot.worldCenter, True)
+
         if self.dribbling:
             # Apply force on the ball towards the center of the robot
             dribble_vec = self.robot.position - self.ball.position
@@ -290,21 +302,40 @@ class RoboCup(gym.Env, EzPickle):
             self.ball.ApplyForce(dribble_force, self.ball.worldCenter, True)
             self.robot.ApplyForce(-dribble_force, self.robot.worldCenter, True)
 
-        step_reward = 0
-        done = False
-        return self.state, step_reward, done, {}
+            self.dribbling_count += 1
+        else:
+            self.dribbling_count = 0
 
-    def shoot(self):
-        if self.can_kick:
-            shoot_magnitude = 0.0015
-            shoot_impulse = [shoot_magnitude * np.cos(self.robot.angle), shoot_magnitude * np.sin(self.robot.angle)]
-            self.ball.ApplyLinearImpulse(shoot_impulse, self.robot.worldCenter, True)
+        self.timestep += 1
+
+        done = self.dribbling_count >= 50
+        step_reward = 1.0 if self.dribbling else 0 + 100 * 0.999 ** self.timestep if done else 0
+
+        # If the ball is out of bounds, we're done but with low reward
+        if (self.ball.position[0] < FIELD_MIN_X or
+            self.ball.position[0] > FIELD_MAX_X or
+            self.ball.position[1] < FIELD_MIN_Y or
+            self.ball.position[1] > FIELD_MAX_Y):
+            done = True
+            step_reward = 0
+        return self.state, step_reward, done, {}
 
     def reset(self):
         self._destroy()
         self.ball = None
+        self.robot = None
         self.state = None
         self._create()
+
+        self.timestep = 0
+
+        self.dribbling = False
+        self.can_kick = False
+        self.kick_cooldown = 0
+        self.dribbling_count = 0
+
+        self.reward = 0.0
+        self.prev_reward = 0.0
 
     def render(self):
         if self.viewer is None:
@@ -344,8 +375,6 @@ class RoboCup(gym.Env, EzPickle):
             robot.add_attr(self.robot_transform)
             self.viewer.add_geom(robot)
 
-            print("robot_angles: ", robot_angles)
-
             kicker_width = 0.06
             kicker_depth = 0.02
             kicker_buffer = 0.001
@@ -379,34 +408,30 @@ if __name__ == '__main__':
     restart = False
     env = RoboCup()
 
-    force = [0, 0, 0]
-    shoot = False
-
+    force = [0, 0, 0, 0]
 
     def key_press(k, mod):
-        global restart
-        global force
-        global shoot
+        global restart, force
         if k == key.SPACE:
             restart = True
         if k == key.UP:
-            force[1] = 50
+            force[1] = 10
         if k == key.DOWN:
-            force[1] = -50
+            force[1] = -10
         if k == key.LEFT:
-            force[0] = -50
+            force[0] = -10
         if k == key.RIGHT:
-            force[0] = 50
+            force[0] = 10
         if k == key.A:
-            force[2] = -1
+            force[2] = -80
         if k == key.D:
-            force[2] = 1
+            force[2] = 80
         if k == key.W:
-            shoot = True
+            force[3] = 2.5e-3
 
 
     def key_release(k, mod):
-        global force, shoot
+        global force
         if k == key.UP:
             force[1] = 0
         if k == key.DOWN:
@@ -420,25 +445,19 @@ if __name__ == '__main__':
         if k == key.D:
             force[2] = 0
         if k == key.W:
-            shoot = False
+            force[3] = 0
 
 
     env.render()
     env.viewer.window.on_key_press = key_press
     env.viewer.window.on_key_release = key_release
-    print(env.ball.mass, env.robot.mass)
 
     is_open = True
     while is_open:
         env.reset()
         restart = False
         while True:
-            a = None
-            env.robot.ApplyForce(force[:2], env.robot.worldCenter, True)
-            env.robot.ApplyTorque(force[2], True)
-            if shoot:
-                env.shoot()
-            s, r, done, info = env.step(a)
+            s, r, done, info = env.step(force)
             is_open = env.render()
             if done or restart:
                 break
