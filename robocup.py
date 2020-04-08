@@ -177,7 +177,7 @@ class RoboCup(gym.Env, EzPickle):
         self.ball.CreateCircleFixture(
             radius=BALL_RADIUS,
             density=BALL_DENSITY,
-            restitution=0.4
+            restitution=0.2
         )
 
         self.ball.linearVelocity[0] = float(self.state[1][1][0])
@@ -194,7 +194,7 @@ class RoboCup(gym.Env, EzPickle):
         self.robot.CreatePolygonFixture(
             vertices=robot_points,
             restitution=0.3,
-            density=10.0,
+            density=100.0,
         )
         # Kicker rectangle
         self.robot.CreatePolygonFixture(
@@ -204,7 +204,7 @@ class RoboCup(gym.Env, EzPickle):
                 (0, -0.06),
                 (0, 0.06)
             ],
-            restitution=0.1,
+            restitution=0.15,
             userData={"kicker": True}
         )
         # Dribbler sense
@@ -215,15 +215,14 @@ class RoboCup(gym.Env, EzPickle):
                 (0, -0.06),
                 (0, 0.06)
             ],
-            restitution=0.1,
             isSensor=True
         )
 
         self.robot.linearVelocity[0] = float(self.state[0][1][0])
         self.robot.linearVelocity[1] = float(self.state[0][1][1])
         self.robot.angularVelocity = float(self.state[0][1][2])
-        self.robot.linearDamping = 4
-        self.robot.angularDamping = 4
+        self.robot.linearDamping = 10
+        self.robot.angularDamping = 10
         self.robot.fixedRotation = False
 
 
@@ -234,25 +233,25 @@ class RoboCup(gym.Env, EzPickle):
         self.top.CreateEdgeFixture(vertices=[
             (VIEW_MIN_X, VIEW_MIN_Y),
             (VIEW_MAX_X, VIEW_MIN_Y)
-        ], restitution=1.0)
+        ], restitution=0.7)
 
         self.bottom = self.world.CreateStaticBody(position=(0, 0), userData=wall_data)
         self.bottom.CreateEdgeFixture(vertices=[
             (VIEW_MIN_X, VIEW_MAX_Y),
             (VIEW_MAX_X, VIEW_MAX_Y)
-        ], restitution=1.0)
+        ], restitution=0.7)
 
         self.left = self.world.CreateStaticBody(position=(0, 0), userData=wall_data)
         self.left.CreateEdgeFixture(vertices=[
             (VIEW_MIN_X, VIEW_MIN_Y),
             (VIEW_MIN_X, VIEW_MAX_Y)
-        ], restitution=1.0)
+        ], restitution=0.7)
 
         self.right = self.world.CreateStaticBody(position=(0, 0), userData=wall_data)
         self.right.CreateEdgeFixture(vertices=[
             (VIEW_MAX_X, VIEW_MIN_Y),
             (VIEW_MAX_X, VIEW_MAX_Y)
-        ], restitution=1.0)
+        ], restitution=0.7)
 
     def _applyBallFriction(self):
         # Apply friction to the ball
@@ -297,7 +296,7 @@ class RoboCup(gym.Env, EzPickle):
 
     def shoot(self):
         if self.can_kick:
-            shoot_magnitude = 0.003
+            shoot_magnitude = 0.0015
             shoot_impulse = [shoot_magnitude * np.cos(self.robot.angle), shoot_magnitude * np.sin(self.robot.angle)]
             self.ball.ApplyLinearImpulse(shoot_impulse, self.robot.worldCenter, True)
 
@@ -391,17 +390,17 @@ if __name__ == '__main__':
         if k == key.SPACE:
             restart = True
         if k == key.UP:
-            force[1] = 3
+            force[1] = 50
         if k == key.DOWN:
-            force[1] = -3
+            force[1] = -50
         if k == key.LEFT:
-            force[0] = -3
+            force[0] = -50
         if k == key.RIGHT:
-            force[0] = 3
+            force[0] = 50
         if k == key.A:
-            force[2] = -0.1
+            force[2] = -1
         if k == key.D:
-            force[2] = 0.1
+            force[2] = 1
         if k == key.W:
             shoot = True
 
@@ -427,6 +426,7 @@ if __name__ == '__main__':
     env.render()
     env.viewer.window.on_key_press = key_press
     env.viewer.window.on_key_release = key_release
+    print(env.ball.mass, env.robot.mass)
 
     is_open = True
     while is_open:
@@ -437,7 +437,6 @@ if __name__ == '__main__':
             env.robot.ApplyForce(force[:2], env.robot.worldCenter, True)
             env.robot.ApplyTorque(force[2], True)
             if shoot:
-                shoot = False
                 env.shoot()
             s, r, done, info = env.step(a)
             is_open = env.render()
