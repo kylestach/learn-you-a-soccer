@@ -39,7 +39,7 @@ robot_angles = list(np.linspace(
     2 * np.pi - ROBOT_MOUTH_ANGLE / 2,
     15))
 
-MAX_TIMESTEPS = 100
+MAX_TIMESTEPS = 300
 
 robot_points = [
     (ROBOT_RADIUS * np.cos(-a), ROBOT_RADIUS * np.sin(-a)) for a in robot_angles
@@ -108,6 +108,7 @@ class CollectRewardConfig:
                  done_reward_coeff: float = 100.0,
                  done_reward_exp_base: float = 0.999,
                  ball_out_of_bounds_reward: float = 0.0,
+                 distance_to_ball_coeff: float = 1.0,
                  ):
         self.dribbling_reward = dribbling_reward
 
@@ -117,12 +118,22 @@ class CollectRewardConfig:
 
         self.ball_out_of_bounds_reward = ball_out_of_bounds_reward
 
+        self.distance_to_ball_coeff = distance_to_ball_coeff
+
+
+class InitialConditionConfig:
+    def __init__(self, max_ball_velocity: float = 0.5):
+        self.max_ball_velocity = max_ball_velocity
+
 
 class CollectEnvConfig:
     def __init__(self, dribble_count_done: int = 50,
-                 collect_reward_config: CollectRewardConfig = CollectRewardConfig()):
+                 collect_reward_config: CollectRewardConfig = CollectRewardConfig(),
+                 initial_condition_config: InitialConditionConfig = InitialConditionConfig()):
         self.dribble_count_done: int = dribble_count_done
+        self.ball_dist_done: float = 0.1
         self.collect_reward_config: CollectRewardConfig = collect_reward_config
+        self.initial_condition_config: InitialConditionConfig = initial_condition_config
 
 
 class RoboCup(gym.Env, EzPickle):
@@ -216,7 +227,14 @@ class RoboCup(gym.Env, EzPickle):
 
     def _create(self):
         # Create the goal, robots, ball and field
-        self.state = self.observation_space.sample()
+        self.state: RoboCupState = self.observation_space.sample()
+
+        conf: InitialConditionConfig = self.config.initial_condition_config
+        # RAMP THE BALL VELOCITIES
+        ball_magnitude = conf.max_ball_velocity * np.random.uniform()
+        ball_angle = np.random.uniform(0, 2 * np.pi)
+        self.state = (self.state[0], (
+            self.state[1][0], np.array([ball_magnitude * np.cos(ball_angle), ball_magnitude * np.sin(ball_angle)])))
 
         ball_data = {
             "id": 0
@@ -357,16 +375,29 @@ class RoboCup(gym.Env, EzPickle):
 
         self.timestep += 1
 
-        done = self.dribbling_count >= self.config.dribble_count_done
-
         reward_config = self.config.collect_reward_config
+        # done = self.dribbling_count >= self.config.dribble_count_done
+        # if done:
+        #     step_reward = reward_config.done_reward_additive + \
+        #                   reward_config.done_reward_coeff * reward_config.done_reward_exp_base ** self.timestep
+        # elif self.dribbling:
+        #     step_reward = reward_config.dribbling_reward
+        # else:
+        #     step_reward = 0
+
+        ####################################
+        # TRANSFER LEARNING: Tracking ball #
+        ####################################
+        dist = np.sqrt((self.robot.position[0] - self.ball.position[0]) ** 2 + (
+                self.robot.position[1] - self.ball.position[1]) ** 2)
+
+        done = dist < self.config.ball_dist_done or self.dribbling_count >= 1
+
         if done:
             step_reward = reward_config.done_reward_additive + \
                           reward_config.done_reward_coeff * reward_config.done_reward_exp_base ** self.timestep
-        elif self.dribbling:
-            step_reward = reward_config.dribbling_reward
         else:
-            step_reward = 0
+            step_reward = reward_config.distance_to_ball_coeff * dist
 
         # If the ball is out of bounds, we're done but with low reward
         if (self.ball.position[0] < FIELD_MIN_X or

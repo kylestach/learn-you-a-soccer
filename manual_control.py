@@ -64,6 +64,7 @@ def main():
         restart = False
         while True:
             s, r, done, info = env.step(force)
+            print("reward: ", r)
             is_open = env.render()
             if done or restart:
                 break
