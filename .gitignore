@@ -147,3 +147,13 @@ dmypy.json
 .idea/**/dynamic.xml
 .idea/**/uiDesigner.xml
 .idea/**/dbnavigator.xml
+
+# Saved models
+saved_models
+
+# Tensorboard logging information
+runs
+
+# Venv
+venv
+.venv

@@ -1,4 +1,4 @@
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 import Box2D
 from Box2D import b2ContactListener, b2Contact, b2Body
 
@@ -38,6 +38,8 @@ robot_angles = list(np.linspace(
     ROBOT_MOUTH_ANGLE / 2,
     2 * np.pi - ROBOT_MOUTH_ANGLE / 2,
     15))
+
+MAX_TIMESTEPS = 100
 
 robot_points = [
     (ROBOT_RADIUS * np.cos(-a), ROBOT_RADIUS * np.sin(-a)) for a in robot_angles
@@ -152,7 +154,7 @@ class RoboCup(gym.Env, EzPickle):
             dtype=np.float32
         )
 
-        self.state: RoboCupState = ((np.zeros(3), np.zeros(3)), (np.zeros(3), np.zeros(3)))
+        self.state: RoboCupState = ((np.zeros(3), np.zeros(3)), (np.zeros(2), np.zeros(2)))
 
         # Observation space is:
         # [ robot0_x robot0_y robot0_h robot0_vx robot0_vy robot0_vh ]
@@ -189,6 +191,15 @@ class RoboCup(gym.Env, EzPickle):
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
+
+    def state_list(self) -> np.ndarray:
+        # Observation space is:
+        # [ robot0_x robot0_y robot0_h robot0_vx robot0_vy robot0_vh ]
+        # ,
+        # [ ball_x ball_y ball_vx ball_vy ]
+        return np.array(
+            [self.state[0][0][0], self.state[0][0][1], self.state[0][0][2], self.state[0][1][0], self.state[0][1][0],
+             self.state[0][1][2], self.state[1][0][0], self.state[1][0][1], self.state[1][1][0], self.state[1][1][1]])
 
     def _destroy(self):
         for body in [
@@ -303,7 +314,7 @@ class RoboCup(gym.Env, EzPickle):
         friction = self.ball.mass * friction_accel
         self.ball.ApplyForce(friction, self.ball.worldCenter, False)
 
-    def step(self, action: CollectAction) -> Tuple[RoboCupState, float, bool, dict]:
+    def step(self, action: CollectAction) -> Tuple[np.ndarray, float, bool, dict]:
         # Gather the entire state.
         robot_state = (
             np.array([self.robot.position[0], self.robot.position[1], self.robot.angle]),
@@ -350,7 +361,8 @@ class RoboCup(gym.Env, EzPickle):
 
         reward_config = self.config.collect_reward_config
         if done:
-            step_reward = reward_config.done_reward_additive + reward_config.done_reward_coeff * reward_config.done_reward_exp_base ** self.timestep
+            step_reward = reward_config.done_reward_additive + \
+                          reward_config.done_reward_coeff * reward_config.done_reward_exp_base ** self.timestep
         elif self.dribbling:
             step_reward = reward_config.dribbling_reward
         else:
@@ -363,14 +375,20 @@ class RoboCup(gym.Env, EzPickle):
                 self.ball.position[1] > FIELD_MAX_Y):
             done = True
             step_reward = reward_config.ball_out_of_bounds_reward
-        return self.state, step_reward, done, {}
+
+        # If time limit exceeded then we're done
+        if self.timestep > MAX_TIMESTEPS:
+            done = True
+            step_reward = 0
+
+        return self.state_list(), step_reward, done, {}
 
     def reset(self):
         self._destroy()
         self.ball = None
         self.robot = None
         self.state = None
-        self._create()
+        self._create()  # This sets self.state
 
         self.timestep = 0
 
@@ -382,7 +400,9 @@ class RoboCup(gym.Env, EzPickle):
         self.reward = 0.0
         self.prev_reward = 0.0
 
-    def render(self, **kwargs):
+        return self.state_list()
+
+    def render(self, mode="human", **kwargs):
         if self.viewer is None:
             from gym.envs.classic_control import rendering
             self.viewer = rendering.Viewer(WINDOW_H, WINDOW_W)
