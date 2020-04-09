@@ -18,7 +18,7 @@ def handle_key_press(k, restart, force):
     if k == key.D:
         force[2] = 80
     if k == key.W:
-        force[3] = 2.5e-3
+        force[3] = 6
     return restart, force
 
 
