@@ -1,4 +1,4 @@
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional
 import Box2D
 from Box2D import b2ContactListener, b2Contact, b2Body
 
@@ -8,7 +8,7 @@ from gym.utils import seeding, EzPickle
 
 import numpy as np
 
-from robocup_types import CollectAction, RoboCupState
+from robocup_env.envs.robocup_types import CollectAction, RoboCupState
 
 WINDOW_W = 600
 WINDOW_H = 900
@@ -108,7 +108,8 @@ class CollectRewardConfig:
                  done_reward_coeff: float = 100.0,
                  done_reward_exp_base: float = 0.999,
                  ball_out_of_bounds_reward: float = 0.0,
-                 distance_to_ball_coeff: float = 1.0,
+                 # It's reward, not cost. Should be negative to reward lower distances
+                 distance_to_ball_coeff: float = -1.0,
                  ):
         self.dribbling_reward = dribbling_reward
 

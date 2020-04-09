@@ -1,4 +1,4 @@
-from robocup import RoboCup
+from robocup_env.envs.robocup import RoboCup
 from torch.utils.tensorboard import SummaryWriter
 
 import logging
@@ -7,7 +7,6 @@ import random
 import numpy as np
 import torch
 
-import gym
 from ddpg import DDPG
 from utils.noise import OrnsteinUhlenbeckActionNoise
 from utils.replay_memory import ReplayMemory, Transition
@@ -142,23 +141,23 @@ def main():
                 epoch_value_loss = 0
                 epoch_policy_loss = 0
 
-                if len(memory) > batch_size:
-                    transitions = memory.sample(batch_size)
-                    # Transpose the batch
-                    # (see http://stackoverflow.com/a/19343/3343043 for detailed explanation).
-                    batch = Transition(*zip(*transitions))
-
-                    # Update actor and critic according to the batch
-                    value_loss, policy_loss = agent.update_params(batch)
-
-                    epoch_value_loss += value_loss
-                    epoch_policy_loss += policy_loss
-
                 if done:
                     break
+
+            if len(memory) > batch_size:
+                transitions = memory.sample(batch_size)
+                # Transpose the batch
+                # (see http://stackoverflow.com/a/19343/3343043 for detailed explanation).
+                batch = Transition(*zip(*transitions))
+
+                # Update actor and critic according to the batch
+                value_loss, policy_loss = agent.update_params(batch)
+
+                epoch_value_loss += value_loss
+                epoch_policy_loss += policy_loss
             timestep += episode_timestep
             episode_time = time.time() - episode_start_time
-            fps = episode_timestep
+            fps = episode_timestep / episode_time
 
             writer.add_scalar('episode/episode_time', episode_time, episode_num)
             writer.add_scalar('episode/fps', fps, episode_num)

@@ -1,4 +1,4 @@
-from robocup import RoboCup
+from robocup_env.envs.robocup import RoboCup
 from pyglet.window import key
 
 
