@@ -109,7 +109,7 @@ class CollectRewardConfig:
                  done_reward_exp_base: float = 0.999,
                  ball_out_of_bounds_reward: float = 0.0,
                  # It's reward, not cost. Should be negative to reward lower distances
-                 distance_to_ball_coeff: float = -1.0,
+                 distance_to_ball_coeff: float = -0.1,
                  ):
         self.dribbling_reward = dribbling_reward
 
@@ -148,6 +148,8 @@ class RoboCup(gym.Env, EzPickle):
         self.ball: Optional[b2Body] = None
         self.robot: Optional[b2Body] = None
         self.config: CollectEnvConfig = collect_env_config
+
+        self._max_episode_steps = MAX_TIMESTEPS
 
         self.timestep = 0
 
@@ -377,28 +379,31 @@ class RoboCup(gym.Env, EzPickle):
         self.timestep += 1
 
         reward_config = self.config.collect_reward_config
-        # done = self.dribbling_count >= self.config.dribble_count_done
-        # if done:
-        #     step_reward = reward_config.done_reward_additive + \
-        #                   reward_config.done_reward_coeff * reward_config.done_reward_exp_base ** self.timestep
-        # elif self.dribbling:
-        #     step_reward = reward_config.dribbling_reward
-        # else:
-        #     step_reward = 0
+        done = self.dribbling_count >= self.config.dribble_count_done
 
-        ####################################
-        # TRANSFER LEARNING: Tracking ball #
-        ####################################
         dist = np.sqrt((self.robot.position[0] - self.ball.position[0]) ** 2 + (
                 self.robot.position[1] - self.ball.position[1]) ** 2)
-
-        done = dist < self.config.ball_dist_done or self.dribbling_count >= 1
-
         if done:
             step_reward = reward_config.done_reward_additive + \
                           reward_config.done_reward_coeff * reward_config.done_reward_exp_base ** self.timestep
+        elif self.dribbling:
+            step_reward = reward_config.dribbling_reward
         else:
             step_reward = reward_config.distance_to_ball_coeff * dist
+
+        # ####################################
+        # # TRANSFER LEARNING: Tracking ball #
+        # ####################################
+        # dist = np.sqrt((self.robot.position[0] - self.ball.position[0]) ** 2 + (
+        #         self.robot.position[1] - self.ball.position[1]) ** 2)
+        #
+        # done = dist < self.config.ball_dist_done or self.dribbling_count >= 1
+        #
+        # if done:
+        #     step_reward = reward_config.done_reward_additive + \
+        #                   reward_config.done_reward_coeff * reward_config.done_reward_exp_base ** self.timestep
+        # else:
+        #     step_reward = reward_config.distance_to_ball_coeff * dist
 
         # If the ball is out of bounds, we're done but with low reward
         if (self.ball.position[0] < FIELD_MIN_X or
@@ -497,3 +502,8 @@ class RoboCup(gym.Env, EzPickle):
         self.robot_transform.set_rotation(self.robot.angle)
 
         return self.viewer.render()
+
+    def close(self):
+        if self.viewer:
+            self.viewer.close()
+            self.viewer = None
