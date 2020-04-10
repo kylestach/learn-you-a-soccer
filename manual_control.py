@@ -1,4 +1,4 @@
-from robocup import RoboCup
+from robocup_env.envs.robocup import RoboCup
 from pyglet.window import key
 
 
@@ -64,6 +64,7 @@ def main():
         restart = False
         while True:
             s, r, done, info = env.step(force)
+            print("reward: ", r)
             is_open = env.render()
             if done or restart:
                 break
