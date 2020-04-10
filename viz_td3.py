@@ -11,8 +11,8 @@ import TD3
 
 
 # Runs policy for X episodes and returns average reward
-def viz_policy(policy, env_name, seed, eval_episodes=10) -> float:
-    eval_env = gym.make(env_name)
+def viz_policy(policy, env_name, seed, eval_episodes=10, use_sincos=False) -> float:
+    eval_env = gym.make(env_name, sincos_embedding=use_sincos)
     eval_env.seed(seed + 100)
 
     avg_reward = 0.
@@ -36,10 +36,10 @@ def viz_policy(policy, env_name, seed, eval_episodes=10) -> float:
     return avg_reward
 
 
-def get_latest() -> Tuple[str, int]:
+def get_latest(filter_str) -> Tuple[str, int]:
     import re
     models_dir = "./models/"
-    files = [file for file in os.listdir(models_dir)]
+    files = [file for file in os.listdir(models_dir) if filter_str in file]
     filepaths = [os.path.join(models_dir, file) for file in files]
     last_file = max(filepaths, key=os.path.getctime)
 
@@ -69,12 +69,15 @@ def main():
     parser.add_argument("--policy_freq", default=2, type=int)  # Frequency of delayed policy updates
     parser.add_argument("--save_model", action="store_true")  # Save model and optimizer parameters
     parser.add_argument("--load_model", default="")  # Model load file name, "" doesn't load, "default" uses file_name
+    parser.add_argument("--filter", default="", type=str)  # Filter for model save files
     args = parser.parse_args()
 
-    env = gym.make(args.env)
+    use_sincos = False
 
-    state_dim = 10
-    # state_dim = env.observation_space.shape[0]
+    env = gym.make(args.env, sincos_embedding=use_sincos)
+
+    # state_dim = 10
+    state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
     max_action = float(env.action_space.high[0])
 
@@ -90,13 +93,14 @@ def main():
 
     last_timestep = 0
     while True:
-        policy_file, timestep = get_latest()
+        policy_file, timestep = get_latest(args.filter)
+        print("policy_file: ", policy_file)
         policy.load(policy_file)
 
         if timestep != last_timestep:
             print(f"Timestep: {timestep}")
             last_timestep = timestep
-        viz_policy(policy, args.env, args.seed, 10)
+        viz_policy(policy, args.env, args.seed, 3, use_sincos)
 
 
 if __name__ == "__main__":

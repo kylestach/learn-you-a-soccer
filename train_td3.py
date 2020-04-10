@@ -13,7 +13,7 @@ import TD3
 # Runs policy for X episodes and returns average reward
 # A fixed seed is used for the eval environment
 def eval_policy(policy, env_name, seed, eval_episodes=30):
-    eval_env = gym.make(env_name)
+    eval_env = gym.make(env_name, sincos_embedding=True)
     eval_env.seed(seed + 100)
 
     avg_reward = 0.
@@ -48,12 +48,14 @@ if __name__ == "__main__":
     parser.add_argument("--policy_noise", default=0.2)  # Noise added to target policy during critic update
     parser.add_argument("--noise_clip", default=0.5)  # Range to clip target policy noise
     parser.add_argument("--policy_freq", default=2, type=int)  # Frequency of delayed policy updates
-    parser.add_argument("--save_model", action="store_true")  # Save model and optimizer parameters
+    parser.add_argument("--save_model", default=True, action="store_true")  # Save model and optimizer parameters
     parser.add_argument("--load_model", default="")  # Model load file name, "" doesn't load, "default" uses file_name
     parser.add_argument("--train_every", default=5, type=int)  # How many timesteps to take between training instances
+    parser.add_argument("--log_name", default="default",
+                        type=str)  # How many timesteps to take between training instances
     args = parser.parse_args()
 
-    file_name = f"{args.policy}_{args.env}_{args.seed}"
+    file_name = f"{args.policy}_{args.env}_{args.log_name}_{args.seed}"
     print("---------------------------------------")
     print(f"Policy: {args.policy}, Env: {args.env}, Seed: {args.seed}")
     print("---------------------------------------")
@@ -64,15 +66,15 @@ if __name__ == "__main__":
     if args.save_model and not os.path.exists("./models"):
         os.makedirs("./models")
 
-    env = gym.make(args.env)
+    env = gym.make(args.env, sincos_embedding=True)
 
     # Set seeds
     env.seed(args.seed)
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    state_dim = 10
-    # state_dim = env.observation_space.shape[0]
+    # state_dim = 10
+    state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
     max_action = float(env.action_space.high[0])
 
@@ -85,7 +87,7 @@ if __name__ == "__main__":
     }
 
     log_dir = "runs"
-    writer = SummaryWriter(f"{log_dir}/{args.env}_{args.seed}")
+    writer = SummaryWriter(f"{log_dir}/{args.env}_{args.log_name}_{args.seed}")
 
     # Initialize policy
     if args.policy == "TD3":
@@ -141,7 +143,7 @@ if __name__ == "__main__":
         # Train agent after collecting sufficient data
         if t >= args.start_timesteps and (t + 1) % args.train_every == 0:
             critic_loss = policy.train(replay_buffer, args.batch_size)
-            writer.add_scalar('training/critic_loss', critic_loss, episode_timesteps)
+            writer.add_scalar('training/critic_loss', critic_loss, (t + 1))
 
         if done:
             # +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True

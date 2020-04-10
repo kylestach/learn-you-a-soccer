@@ -1,5 +1,7 @@
 from robocup_env.envs.robocup import RoboCup
 from pyglet.window import key
+import numpy as np
+import gym
 
 
 def handle_key_press(k, restart, force):
@@ -18,7 +20,7 @@ def handle_key_press(k, restart, force):
     if k == key.D:
         force[2] = 1
     if k == key.W:
-        force[3] = 6
+        force[3] = 1
     return restart, force
 
 
@@ -42,9 +44,9 @@ def handle_key_release(k, force):
 
 def main():
     restart = False
-    env = RoboCup()
+    env = gym.make("robocup_env:robocup-collect-v0", sincos_embedding=True)
 
-    force = [0.0, 0.0, 0.0, 0.0]
+    force = np.array([0.0, 0.0, 0.0, 0.0])
 
     def key_press(k, mod):
         nonlocal restart, force
@@ -62,10 +64,12 @@ def main():
     while is_open:
         env.reset()
         restart = False
+        total_r = 0
         while True:
             s, r, done, info = env.step(force)
-            print(env.robot.angle)
-            print(f"reward: {r}, done: {done}")
+            print(f"env.robot.angle: {env.robot.angle:3f}    state: {s[2]:3f}, {s[3]:3f}")
+            total_r += r
+            print("total r: ", total_r)
             is_open = env.render()
             if done or restart:
                 break

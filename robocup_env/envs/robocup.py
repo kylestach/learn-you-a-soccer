@@ -9,7 +9,7 @@ from gym.utils import seeding, EzPickle
 import numpy as np
 import math
 
-from robocup_env.envs.robocup_types import CollectAction, RoboCupState
+from robocup_env.envs.robocup_types import *
 
 WINDOW_W = 600
 WINDOW_H = 900
@@ -40,7 +40,17 @@ robot_angles = list(np.linspace(
     2 * np.pi - ROBOT_MOUTH_ANGLE / 2,
     15))
 
-MAX_TIMESTEPS = 300
+MAX_TIMESTEPS = 600
+
+GOAL_HEIGHT = FIELD_HEIGHT / 6
+GOAL_DEPTH = 0.3
+
+LEFT_GOAL_POINTS = [
+    (FIELD_MIN_X - GOAL_DEPTH, GOAL_HEIGHT / 2),
+    (FIELD_MIN_X, GOAL_HEIGHT / 2),
+    (FIELD_MIN_X, -GOAL_HEIGHT / 2),
+    (FIELD_MIN_X - GOAL_DEPTH, -GOAL_HEIGHT / 2)
+]
 
 robot_points = [
     (ROBOT_RADIUS * np.cos(-a), ROBOT_RADIUS * np.sin(-a)) for a in robot_angles
@@ -77,7 +87,7 @@ class CollisionDetector(b2ContactListener):
             if self.has_dribbler_sense(contact):
                 self.env.dribbling = True
             elif self.has_kicker(contact):
-                self.env.can_kick = False
+                self.env.can_kick = True
 
     def EndContact(self, contact):
         if 'type' not in contact.fixtureA.body.userData or 'type' not in contact.fixtureB.body.userData:
@@ -106,14 +116,31 @@ class VelocitySpace(spaces.Space):
     def contains(self, x):
         return True
 
+
 class RoboCupStateSpace(spaces.Space):
     """
     Sample 2-dimensional position and velocity.
+    rx, ry, rh, rdx, rdy, rdh
+    bx, by, bdx, bdy
     """
-    def __init__(self, num_robots):
-        self.pose_space = spaces.Box(
+
+    def __init__(self, num_robots, sincos: bool = False):
+        super().__init__()
+        if sincos:
+            self.pose_space = spaces.Box(
+                np.array([FIELD_MIN_X, FIELD_MIN_Y, -1, -1]),
+                np.array([FIELD_MAX_X, FIELD_MAX_Y, 1, 1]),
+                dtype=np.float32
+            )
+        else:
+            self.pose_space = spaces.Box(
+                np.array([FIELD_MIN_X, FIELD_MIN_Y, 0]),
+                np.array([FIELD_MAX_X, FIELD_MAX_Y, 2 * np.pi]),
+                dtype=np.float32
+            )
+        self.actual_pose_space = spaces.Box(
             np.array([FIELD_MIN_X, FIELD_MIN_Y, 0]),
-            np.array([FIELD_MAX_X, FIELD_MAX_Y, np.pi * 2]),
+            np.array([FIELD_MAX_X, FIELD_MAX_Y, 2 * np.pi]),
             dtype=np.float32
         )
 
@@ -128,19 +155,34 @@ class RoboCupStateSpace(spaces.Space):
         self.robot_velocity_space = VelocitySpace((3,), np.array([2.0, 2.0, 2.0]))
         self.ball_velocity_space = VelocitySpace((2,), np.array([1.0, 1.0]))
 
-        self.shape = (num_robots * 6 + 4,)
+        if sincos:
+            self.shape = (num_robots * 7 + 4,)
+        else:
+            self.shape = (num_robots * 6 + 4,)
 
     def sample(self):
         return np.concatenate([
-            np.concatenate([
-                self.pose_space.sample(),
-                self.robot_velocity_space.sample()]) for _ in range(self.num_robots)
-        ] + [
-            np.concatenate([
-                self.position_space.sample(),
-                self.ball_velocity_space.sample()
-            ])
-        ])
+                                  np.concatenate([
+                                      self.pose_space.sample(),
+                                      self.robot_velocity_space.sample()]) for _ in range(self.num_robots)
+                              ] + [
+                                  np.concatenate([
+                                      self.position_space.sample(),
+                                      self.ball_velocity_space.sample()
+                                  ])
+                              ])
+
+    def sample_state(self):
+        return np.concatenate([
+                                  np.concatenate([
+                                      self.actual_pose_space.sample(),
+                                      self.robot_velocity_space.sample()]) for _ in range(self.num_robots)
+                              ] + [
+                                  np.concatenate([
+                                      self.position_space.sample(),
+                                      self.ball_velocity_space.sample()
+                                  ])
+                              ])
 
     def contains(self, x):
         return (self.pose_space.contains(x[:3]) and
@@ -148,13 +190,14 @@ class RoboCupStateSpace(spaces.Space):
                 self.position_space.contains(x[6:8]) and
                 self.ball_velocity_space.contains(x[8:]))
 
+
 class CollectRewardConfig:
     def __init__(self,
-                 dribbling_reward: float = 1.0,
+                 dribbling_reward: float = 0.1,
                  done_reward_additive: float = 0.0,
-                 done_reward_coeff: float = 300.0,
+                 done_reward_coeff: float = 500.0,
                  done_reward_exp_base: float = 0.998,
-                 ball_out_of_bounds_reward: float = 0.0,
+                 ball_out_of_bounds_reward: float = -30.0,
                  move_reward: float = -0.3,
                  # It's reward, not cost. Should be negative to reward lower distances
                  distance_to_ball_coeff: float = 0.0,
@@ -176,8 +219,9 @@ class InitialConditionConfig:
     def __init__(self, max_ball_velocity: float = 0.5):
         self.max_ball_velocity = max_ball_velocity
 
+
 class CollectEnvConfig:
-    def __init__(self, dribble_count_done: int = 50,
+    def __init__(self, dribble_count_done: int = 100,
                  collect_reward_config: CollectRewardConfig = CollectRewardConfig(),
                  initial_condition_config: InitialConditionConfig = InitialConditionConfig()):
         self.dribble_count_done: int = dribble_count_done
@@ -187,7 +231,7 @@ class CollectEnvConfig:
 
 
 class RoboCup(gym.Env, EzPickle):
-    def __init__(self, collect_env_config: CollectEnvConfig = CollectEnvConfig(), verbose=1):
+    def __init__(self, collect_env_config: CollectEnvConfig = CollectEnvConfig(), verbose=1, sincos_embedding=False):
         EzPickle.__init__(self)
         self.seed()
         self.viewer = None
@@ -200,6 +244,7 @@ class RoboCup(gym.Env, EzPickle):
         self.config: CollectEnvConfig = collect_env_config
 
         self.has_touched = None
+        self.kicked_ball = False
 
         self._max_episode_steps = MAX_TIMESTEPS
 
@@ -216,11 +261,12 @@ class RoboCup(gym.Env, EzPickle):
 
         self.action_space = spaces.Box(
             np.array([-1.0, -1.0, -1.0, 0]),
-            np.array([1.0, 1.0, 1.0, 6]),
+            np.array([1.0, 1.0, 1.0, 1]),
             dtype=np.float32
         )
 
-        self.observation_space = RoboCupStateSpace(1)
+        self.sincos = sincos_embedding
+        self.observation_space = RoboCupStateSpace(1, sincos_embedding)
 
         from gym.envs.classic_control import rendering
         self.ball_transform: Optional[rendering.Transform] = None
@@ -237,7 +283,17 @@ class RoboCup(gym.Env, EzPickle):
         # [ robot0_x robot0_y robot0_h robot0_vx robot0_vy robot0_vh ]
         # ,
         # [ ball_x ball_y ball_vx ball_vy ]
-        return self.state
+
+        # If the observations use a sin/cos embedding for the angle
+        if self.sincos:
+            obs = np.array([
+                self.state[0], self.state[1], np.sin(self.state[2]), np.cos(self.state[2]),
+                self.state[3], self.state[4], self.state[5], self.state[6], self.state[7],
+                self.state[8], self.state[9]
+            ])
+            return obs
+        else:
+            return self.state
 
     def _destroy(self):
         if not self.world:
@@ -250,6 +306,7 @@ class RoboCup(gym.Env, EzPickle):
             'left',
             'right',
             'robot',
+            'goal',
         ]:
             if body in self.__dict__ and self.__dict__[body] is not None:
                 self.world.DestroyBody(self.__dict__[body])
@@ -262,14 +319,18 @@ class RoboCup(gym.Env, EzPickle):
         self.world = Box2D.b2World((0, 0), contactListener=self.contactListener_keepref)
 
         self.has_touched = False
+        self.kicked_ball = False
 
         # Create the goal, robots, ball and field
-        self.state: RoboCupState = self.observation_space.sample()
+        self.state: RoboCupState = self.observation_space.sample_state()
         self.state[6] *= 0.5
         self.state[7] *= 0.5
 
         conf: InitialConditionConfig = self.config.initial_condition_config
+        self.state[BALL_DX] *= conf.max_ball_velocity
+        self.state[BALL_DY] *= conf.max_ball_velocity
 
+        # =========== Ball ====================================================
         self.ball = self.world.CreateDynamicBody(
             position=(float(self.state[6]), float(self.state[7])),
             userData={"type": "ball"},
@@ -284,6 +345,7 @@ class RoboCup(gym.Env, EzPickle):
         self.ball.linearVelocity[0] = float(self.state[8])
         self.ball.linearVelocity[1] = float(self.state[9])
 
+        # =========== Robot ====================================================
         self.robot = self.world.CreateDynamicBody(
             position=(float(self.state[0]), float(self.state[1])),
             angle=float(self.state[2]),
@@ -306,7 +368,15 @@ class RoboCup(gym.Env, EzPickle):
             restitution=0.15,
             userData={"type": "kicker"}
         )
-        # Dribbler sense
+
+        self.robot.linearVelocity[0] = float(self.state[3])
+        self.robot.linearVelocity[1] = float(self.state[4])
+        self.robot.angularVelocity = float(self.state[5])
+        self.robot.linearDamping = 3
+        self.robot.angularDamping = 5
+        self.robot.fixedRotation = False
+
+        # =========== Dribbler Sense ====================================================
         self.dribbler_sense = self.robot.CreatePolygonFixture(
             vertices=[
                 (ROBOT_RADIUS, 0.06),
@@ -318,13 +388,7 @@ class RoboCup(gym.Env, EzPickle):
             userData={"type": "dribbler"}
         )
 
-        self.robot.linearVelocity[0] = float(self.state[3])
-        self.robot.linearVelocity[1] = float(self.state[4])
-        self.robot.angularVelocity = float(self.state[5])
-        self.robot.linearDamping = 3
-        self.robot.angularDamping = 5
-        self.robot.fixedRotation = False
-
+        # =========== Walls ====================================================
         wall_data = {"type": "wall"}
         self.top: Box2D.b2Body = self.world.CreateStaticBody(position=(0, 0), userData=wall_data)
         self.top.CreateEdgeFixture(vertices=[
@@ -349,6 +413,14 @@ class RoboCup(gym.Env, EzPickle):
             (VIEW_MAX_X, VIEW_MIN_Y),
             (VIEW_MAX_X, VIEW_MAX_Y)
         ], restitution=0.7, userData=wall_data)
+
+        # =========== Goal ====================================================
+        self.left_goal = self.world.CreateStaticBody(position=(FIELD_MIN_X, 0), userData={"type": "goal"})
+        self.left_goal.CreatePolygonFixture(
+            vertices=LEFT_GOAL_POINTS,
+            isSensor=True,
+            userData={"type": "goal"}
+        )
 
     def _apply_ball_friction(self):
         # Apply friction to the ball
@@ -388,12 +460,13 @@ class RoboCup(gym.Env, EzPickle):
         self.robot.ApplyTorque(self.robot.inertia * 80 * action[2], True)
 
         self.kick_cooldown += 1
-        if self.can_kick and self.kick_cooldown > 30 and action[3] > KICK_THRESHOLD:
+        if self.can_kick and self.kick_cooldown > 30 and (3.0 * action[3]) > KICK_THRESHOLD:
             self.kick_cooldown = 0
-            shoot_magnitude = self.ball.mass * action[3]
+            shoot_magnitude = self.ball.mass * (3.0 * action[3])
             shoot_impulse = [shoot_magnitude * np.cos(self.robot.angle),
                              shoot_magnitude * np.sin(self.robot.angle)]
             self.ball.ApplyLinearImpulse(shoot_impulse, self.robot.worldCenter, True)
+            self.kicked_ball = True
 
         if self.dribbling:
             # Apply force on the ball towards the center of the robot
@@ -405,11 +478,19 @@ class RoboCup(gym.Env, EzPickle):
             self.dribbling_count += 1
         else:
             self.dribbling_count = 0
+        done_dribbled = self.dribbling_count >= self.config.dribble_count_done
+        if self.dribbling_count == self.config.dribble_count_done:
+            print("Dribbling!")
 
         self.timestep += 1
 
         reward_config = self.config.collect_reward_config
-        done = self.dribbling_count >= self.config.dribble_count_done
+
+        ball_in_left_goal = (VIEW_MIN_X <= self.ball.position[0] <= FIELD_MIN_X) and (
+                -GOAL_HEIGHT / 2 < self.ball.position[1] < GOAL_HEIGHT / 2)
+
+        # done = ball_in_left_goal and self.kicked_ball
+        done = done_dribbled
 
         dist = np.sqrt((self.robot.position[0] - self.ball.position[0]) ** 2 + (
                 self.robot.position[1] - self.ball.position[1]) ** 2)
@@ -417,7 +498,7 @@ class RoboCup(gym.Env, EzPickle):
             step_reward = reward_config.done_reward_additive + \
                           reward_config.done_reward_coeff * reward_config.done_reward_exp_base ** self.timestep
             print(f"Got done reward: {step_reward}")
-        elif self.dribbling:
+        elif self.dribbling and not done_dribbled:
             step_reward = reward_config.dribbling_reward
         else:
             step_reward = reward_config.distance_to_ball_coeff * dist
@@ -438,16 +519,17 @@ class RoboCup(gym.Env, EzPickle):
         # else:
         #     step_reward = reward_config.distance_to_ball_coeff * dist
 
-        # If the ball is out of bounds, we're done but with low reward
-        if (self.ball.position[0] < FIELD_MIN_X or
-                self.ball.position[0] > FIELD_MAX_X or
-                self.ball.position[1] < FIELD_MIN_Y or
-                self.ball.position[1] > FIELD_MAX_Y):
+        # If the ball is out of bounds, and not in the goal, we're done but with low reward
+        if not done and (self.ball.position[0] < FIELD_MIN_X or
+                         self.ball.position[0] > FIELD_MAX_X or
+                         self.ball.position[1] < FIELD_MIN_Y or
+                         self.ball.position[1] > FIELD_MAX_Y):
             done = True
-            if self.has_touched:
-                step_reward = reward_config.ball_out_of_bounds_reward
-            else:
-                step_reward = 0
+            # if self.has_touched:
+            #     step_reward = reward_config.ball_out_of_bounds_reward
+            # else:
+            #     step_reward = 0
+            step_reward = reward_config.ball_out_of_bounds_reward
 
         # If time limit exceeded then we're done
         if self.timestep > MAX_TIMESTEPS:
@@ -515,6 +597,7 @@ class RoboCup(gym.Env, EzPickle):
             robot.add_attr(self.robot_transform)
             self.viewer.add_geom(robot)
 
+            # Draw kicker
             kicker_width = 0.06
             kicker_depth = 0.02
             kicker_buffer = 0.001
@@ -528,6 +611,11 @@ class RoboCup(gym.Env, EzPickle):
             robot_thing.add_attr(self.robot_transform)
             self.viewer.add_geom(robot_thing)
 
+            # Draw goal
+            left_goal = rendering.make_polygon(LEFT_GOAL_POINTS)
+            left_goal.set_color(0.6, 0.8, 0.6)
+            self.viewer.add_geom(left_goal)
+
         self.ball_transform.set_translation(
             self.ball.position[0],
             self.ball.position[1]
@@ -537,7 +625,8 @@ class RoboCup(gym.Env, EzPickle):
             self.robot.position[0],
             self.robot.position[1]
         )
-        self.robot_transform.set_rotation(math.fmod(math.fmod(self.robot.angle, 2 * math.pi) + 2 * math.pi, 2 * math.pi))
+        self.robot_transform.set_rotation(
+            math.fmod(math.fmod(self.robot.angle, 2 * math.pi) + 2 * math.pi, 2 * math.pi))
 
         return self.viewer.render()
 
