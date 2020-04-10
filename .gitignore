@@ -153,6 +153,8 @@ saved_models
 
 # Tensorboard logging information
 runs
+models
+results
 
 # Venv
 venv

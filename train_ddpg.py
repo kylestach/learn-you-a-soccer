@@ -143,18 +143,6 @@ def main():
 
                 if done:
                     break
-
-            if len(memory) > batch_size:
-                transitions = memory.sample(batch_size)
-                # Transpose the batch
-                # (see http://stackoverflow.com/a/19343/3343043 for detailed explanation).
-                batch = Transition(*zip(*transitions))
-
-                # Update actor and critic according to the batch
-                value_loss, policy_loss = agent.update_params(batch)
-
-                epoch_value_loss += value_loss
-                epoch_policy_loss += policy_loss
             timestep += episode_timestep
             episode_time = time.time() - episode_start_time
             fps = episode_timestep / episode_time
