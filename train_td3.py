@@ -12,7 +12,7 @@ import TD3
 
 # Runs policy for X episodes and returns average reward
 # A fixed seed is used for the eval environment
-def eval_policy(policy, env_name, seed, eval_episodes=10):
+def eval_policy(policy, env_name, seed, eval_episodes=30):
     eval_env = gym.make(env_name)
     eval_env.seed(seed + 100)
 
@@ -37,10 +37,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--policy", default="TD3")  # Policy name (TD3, DDPG or OurDDPG)
     parser.add_argument("--env", default="robocup_env:robocup-collect-v0")  # OpenAI gym environment name
-    parser.add_argument("--seed", default=0, type=int)  # Sets Gym, PyTorch and Numpy seeds
+    parser.add_argument("--seed", default=1, type=int)  # Sets Gym, PyTorch and Numpy seeds
     parser.add_argument("--start_timesteps", default=25e3, type=int)  # Time steps initial random policy is used
-    parser.add_argument("--eval_freq", default=5e3, type=int)  # How often (time steps) we evaluate
-    parser.add_argument("--max_timesteps", default=1e6, type=int)  # Max time steps to run environment
+    parser.add_argument("--eval_freq", default=5e4, type=int)  # How often (time steps) we evaluate
+    parser.add_argument("--max_timesteps", default=1e8, type=int)  # Max time steps to run environment
     parser.add_argument("--expl_noise", default=0.1)  # Std of Gaussian exploration noise
     parser.add_argument("--batch_size", default=256, type=int)  # Batch size for both actor and critic
     parser.add_argument("--discount", default=0.99)  # Discount factor
@@ -50,6 +50,7 @@ if __name__ == "__main__":
     parser.add_argument("--policy_freq", default=2, type=int)  # Frequency of delayed policy updates
     parser.add_argument("--save_model", action="store_true")  # Save model and optimizer parameters
     parser.add_argument("--load_model", default="")  # Model load file name, "" doesn't load, "default" uses file_name
+    parser.add_argument("--train_every", default=5, type=int)  # How many timesteps to take between training instances
     args = parser.parse_args()
 
     file_name = f"{args.policy}_{args.env}_{args.seed}"
@@ -138,7 +139,7 @@ if __name__ == "__main__":
         episode_reward += reward
 
         # Train agent after collecting sufficient data
-        if t >= args.start_timesteps:
+        if t >= args.start_timesteps and (t + 1) % args.train_every == 0:
             critic_loss = policy.train(replay_buffer, args.batch_size)
             writer.add_scalar('training/critic_loss', critic_loss, episode_timesteps)
 

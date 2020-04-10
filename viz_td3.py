@@ -96,7 +96,7 @@ def main():
         if timestep != last_timestep:
             print(f"Timestep: {timestep}")
             last_timestep = timestep
-        viz_policy(policy, args.env, args.seed, 100)
+        viz_policy(policy, args.env, args.seed, 10)
 
 
 if __name__ == "__main__":

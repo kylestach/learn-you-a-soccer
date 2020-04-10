@@ -6,17 +6,17 @@ def handle_key_press(k, restart, force):
     if k == key.SPACE:
         restart = True
     if k == key.UP:
-        force[1] = 10
+        force[1] = 1
     if k == key.DOWN:
-        force[1] = -10
+        force[1] = -1
     if k == key.LEFT:
-        force[0] = -10
+        force[0] = -1
     if k == key.RIGHT:
-        force[0] = 10
+        force[0] = 1
     if k == key.A:
-        force[2] = -80
+        force[2] = -1
     if k == key.D:
-        force[2] = 80
+        force[2] = 1
     if k == key.W:
         force[3] = 6
     return restart, force
@@ -64,7 +64,8 @@ def main():
         restart = False
         while True:
             s, r, done, info = env.step(force)
-            print("reward: ", r)
+            print(env.robot.angle)
+            print(f"reward: {r}, done: {done}")
             is_open = env.render()
             if done or restart:
                 break
