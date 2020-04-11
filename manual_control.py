@@ -44,7 +44,7 @@ def handle_key_release(k, force):
 
 def main():
     restart = False
-    env = gym.make("robocup_env:robocup-collect-v0", sincos_embedding=True)
+    env = gym.make("robocup_env:robocup-collect-v0")
 
     force = np.array([0.0, 0.0, 0.0, 0.0])
 
@@ -67,7 +67,7 @@ def main():
         total_r = 0
         while True:
             s, r, done, info = env.step(force)
-            print(f"env.robot.angle: {env.robot.angle:3f}    state: {s[2]:3f}, {s[3]:3f}")
+            print(f"env.robot.angle: {env.robot.angle:3f}    state: {s[2]:3f}, {s[3]:3f}    can_kick: {s[4]}")
             total_r += r
             print("total r: ", total_r)
             is_open = env.render()

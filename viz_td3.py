@@ -6,25 +6,31 @@ import argparse
 import os
 from robocup_env.envs import RoboCup
 
-import utils
+from utils import OrnsteinUhlenbeckActionNoise
 import TD3
 
 
 # Runs policy for X episodes and returns average reward
-def viz_policy(policy, env_name, seed, eval_episodes=10, use_sincos=False) -> float:
-    eval_env = gym.make(env_name, sincos_embedding=use_sincos)
+def viz_policy(policy, env_name, seed, eval_episodes=10) -> float:
+    eval_env = gym.make(env_name)
     eval_env.seed(seed + 100)
 
     avg_reward = 0.
+    s = 0.1
+    ou_noise = OrnsteinUhlenbeckActionNoise(np.zeros(4), np.array([s, s, s, s]))
     for _ in range(eval_episodes):
         state, done = eval_env.reset(), False
         episode_reward = 0
         while not done:
             eval_env.render()
-            action = policy.select_action(np.array(state))
+            # action = policy.select_action(np.array(state))
+            action = eval_env.action_space.sample()
+            # action += np.random.normal(0, 0.3, size=4)
+            action += ou_noise.noise()
             state, reward, done, _ = eval_env.step(action)
             episode_reward += reward
         print("episode reward: ", episode_reward)
+        ou_noise.reset()
         avg_reward += episode_reward
 
     avg_reward /= eval_episodes
@@ -74,7 +80,7 @@ def main():
 
     use_sincos = False
 
-    env = gym.make(args.env, sincos_embedding=use_sincos)
+    env = gym.make(args.env)
 
     # state_dim = 10
     state_dim = env.observation_space.shape[0]
@@ -100,7 +106,7 @@ def main():
         if timestep != last_timestep:
             print(f"Timestep: {timestep}")
             last_timestep = timestep
-        viz_policy(policy, args.env, args.seed, 3, use_sincos)
+        viz_policy(policy, args.env, args.seed, 3)
 
 
 if __name__ == "__main__":

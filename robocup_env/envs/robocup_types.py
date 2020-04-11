@@ -10,5 +10,14 @@ RobotState = Tuple[np.ndarray, np.ndarray]
 BallState = Tuple[np.ndarray, np.ndarray]
 RoboCupState = np.array
 
-BALL_DX = 8
-BALL_DY = 9
+ROBOT_X = 0
+ROBOT_Y = 1
+ROBOT_H = 2
+ROBOT_BALLSENSE = 3
+ROBOT_DX = 4
+ROBOT_DY = 5
+ROBOT_DH = 6
+BALL_X = 7
+BALL_Y = 8
+BALL_DX = 9
+BALL_DY = 10

@@ -7,13 +7,14 @@ from robocup_env.envs import RoboCup
 from torch.utils.tensorboard import SummaryWriter
 
 import utils
+from utils import OrnsteinUhlenbeckActionNoise
 import TD3
 
 
 # Runs policy for X episodes and returns average reward
 # A fixed seed is used for the eval environment
 def eval_policy(policy, env_name, seed, eval_episodes=30):
-    eval_env = gym.make(env_name, sincos_embedding=True)
+    eval_env = gym.make(env_name)
     eval_env.seed(seed + 100)
 
     avg_reward = 0.
@@ -66,7 +67,7 @@ if __name__ == "__main__":
     if args.save_model and not os.path.exists("./models"):
         os.makedirs("./models")
 
-    env = gym.make(args.env, sincos_embedding=True)
+    env = gym.make(args.env)
 
     # Set seeds
     env.seed(args.seed)
@@ -117,18 +118,23 @@ if __name__ == "__main__":
     episode_timesteps = 0
     episode_num = 0
 
+    ou = OrnsteinUhlenbeckActionNoise(np.zeros(action_dim), args.expl_noise * np.ones(action_dim))
+
     for t in range(int(args.max_timesteps)):
 
         episode_timesteps += 1
 
         # Select action randomly or according to policy
         if t < args.start_timesteps:
-            action = env.action_space.sample()
+            # action = env.action_space.sample()
+            action = (
+                ou.noise()
+            ).clip(np.array([-1.0, -1.0, -1.0, 0.0]), np.array([1.0, 1.0, 1.0, 1.0]))
         else:
             action = (
                     policy.select_action(np.array(state))
                     + np.random.normal(0, max_action * args.expl_noise, size=action_dim)
-            ).clip(-max_action, max_action)
+            ).clip(np.array([-1.0, -1.0, -1.0, 0.0]), np.array([1.0, 1.0, 1.0, 1.0]))
 
         # Perform action
         next_state, reward, done, _ = env.step(action)
@@ -154,6 +160,7 @@ if __name__ == "__main__":
             writer.add_scalar('episode/timesteps', episode_timesteps, episode_num)
 
             # Reset environment
+            ou.reset()
             state, done = env.reset(), False
             episode_reward = 0
             episode_timesteps = 0
