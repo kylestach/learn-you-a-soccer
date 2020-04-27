@@ -84,7 +84,7 @@ class CollisionDetector(b2ContactListener):
     def BeginContact(self, contact: b2Contact):
         if self.has_ball(contact) and self.has_robot(contact):
             self.env.has_touched = True
-            if self.has_dribbler_sense(contact):
+            if self.has_kicker(contact):
                 self.env.dribbling = True
             elif self.has_kicker(contact):
                 self.env.can_kick = True
@@ -93,9 +93,8 @@ class CollisionDetector(b2ContactListener):
         if 'type' not in contact.fixtureA.body.userData or 'type' not in contact.fixtureB.body.userData:
             return
         if self.has_ball(contact) and self.has_robot(contact):
-            if self.has_dribbler_sense(contact):
+            if self.has_kicker(contact):
                 self.env.dribbling = False
-            elif self.has_kicker(contact):
                 self.env.can_kick = False
 
 
@@ -254,6 +253,8 @@ class RoboCup(gym.Env, EzPickle):
         self.seed()
         self.viewer = None
 
+        self.t = 0
+
         self.world = None
         self.contactListener_keepref = None
 
@@ -335,15 +336,32 @@ class RoboCup(gym.Env, EzPickle):
         self.has_touched = False
         self.kicked_ball = False
 
+        scale_factor = 1 / (1 + np.exp(-self.t / 50000 + 3))
+        position_scale_factor = scale_factor
+
         # Create the goal, robots, ball and field
         self.state: RoboCupState = self.observation_space.sample_state()
-        self.state[BALL_X] *= 0.5
-        self.state[BALL_Y] *= 0.5
-        self.state[ROBOT_BALLSENSE] = 0
+
+        # Robot pose
+        self.state[0] = scale_factor * self.state[0] + (1 - scale_factor) * 1.5
+        self.state[1] = scale_factor * self.state[1]
+        self.state[2] = np.pi + 2 * np.randn() * scale_factor
+
+        # Ball sense
+        self.state[3] = 0
+
+        # Robot velocity
+        self.state[4] = scale_factor * self.state[4]
+        self.state[5] = scale_factor * self.state[5]
+        self.state[6] = scale_factor * self.state[6]
+
+        # Ball position/velocity
+        self.state[7] *= scale_factor * self.state[7] + (1 - scale_factor) * -1.5
+        self.state[8] *= scale_factor * self.state[8]
+        self.state[9] *= scale_factor * self.state[9] + (1 - scale_factor) * 1.5
+        self.state[10] *= scale_factor * self.state[10]
 
         conf: InitialConditionConfig = self.config.initial_condition_config
-        self.state[BALL_DX] *= conf.max_ball_velocity
-        self.state[BALL_DY] *= conf.max_ball_velocity
 
         # =========== Ball ====================================================
         self.ball = self.world.CreateDynamicBody(
@@ -476,7 +494,7 @@ class RoboCup(gym.Env, EzPickle):
         self.robot.ApplyForce(
             [5 * self.robot.mass * action[0], 5 * self.robot.mass * action[1]],
             self.robot.worldCenter, True)
-        self.robot.ApplyTorque(self.robot.inertia * 80 * action[2], True)
+        self.robot.ApplyTorque(self.robot.inertia * 40 * action[2], True)
 
         self.kick_cooldown += 1
         if self.can_kick and self.kick_cooldown > 30 and (3.0 * action[3]) > KICK_THRESHOLD:
@@ -522,7 +540,7 @@ class RoboCup(gym.Env, EzPickle):
         else:
             step_reward = reward_config.distance_to_ball_coeff * dist
 
-        step_reward += reward_config.move_reward * np.sum(action[:3] ** 2)
+        step_reward += reward_config.move_reward * (np.sum(np.array(action)[:2] ** 2) + 3 * action[2] ** 2)
 
         # ####################################
         # # TRANSFER LEARNING: Tracking ball #
@@ -557,7 +575,8 @@ class RoboCup(gym.Env, EzPickle):
 
         return self.state_list(), step_reward, done, {}
 
-    def reset(self):
+    def reset(self, t=0):
+        self.t = t
         # self._destroy()
         self.ball = None
         self.robot = None

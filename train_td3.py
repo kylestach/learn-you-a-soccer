@@ -161,7 +161,7 @@ if __name__ == "__main__":
 
             # Reset environment
             ou.reset()
-            state, done = env.reset(), False
+            state, done = env.reset(t=t), False
             episode_reward = 0
             episode_timesteps = 0
             episode_num += 1
