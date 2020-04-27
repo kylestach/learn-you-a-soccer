@@ -11,7 +11,7 @@ import TD3
 
 
 # Runs policy for X episodes and returns average reward
-def viz_policy(policy, env_name, seed, eval_episodes=10) -> float:
+def viz_policy(policy, env_name, seed, eval_episodes=10, t=0) -> float:
     eval_env = gym.make(env_name)
     eval_env.seed(seed + 100)
 
@@ -19,7 +19,7 @@ def viz_policy(policy, env_name, seed, eval_episodes=10) -> float:
     s = 0.1
     ou_noise = OrnsteinUhlenbeckActionNoise(np.zeros(4), np.array([s, s, s, s]))
     for _ in range(eval_episodes):
-        state, done = eval_env.reset(), False
+        state, done = eval_env.reset(t=t), False
         episode_reward = 0
         while not done:
             eval_env.render()
@@ -106,7 +106,7 @@ def main():
         if timestep != last_timestep:
             print(f"Timestep: {timestep}")
             last_timestep = timestep
-        viz_policy(policy, args.env, args.seed, 3)
+        viz_policy(policy, args.env, args.seed, 3, timestep)
 
 
 if __name__ == "__main__":

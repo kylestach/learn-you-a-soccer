@@ -13,13 +13,13 @@ import TD3
 
 # Runs policy for X episodes and returns average reward
 # A fixed seed is used for the eval environment
-def eval_policy(policy, env_name, seed, eval_episodes=30):
+def eval_policy(policy, env_name, seed, t, eval_episodes=30):
     eval_env = gym.make(env_name)
     eval_env.seed(seed + 100)
 
     avg_reward = 0.
     for _ in range(eval_episodes):
-        state, done = eval_env.reset(), False
+        state, done = eval_env.reset(t=t), False
         while not done:
             action = policy.select_action(np.array(state))
             state, reward, done, _ = eval_env.step(action)
@@ -111,9 +111,9 @@ if __name__ == "__main__":
     replay_buffer = utils.ReplayBuffer(state_dim, action_dim)
 
     # Evaluate untrained policy
-    evaluations = [eval_policy(policy, args.env, args.seed)]
+    evaluations = [eval_policy(policy, args.env, args.seed, 0)]
 
-    state, done = env.reset(), False
+    state, done = env.reset(t=0), False
     episode_reward = 0
     episode_timesteps = 0
     episode_num = 0
@@ -168,7 +168,7 @@ if __name__ == "__main__":
 
         # Evaluate episode
         if (t + 1) % args.eval_freq == 0:
-            evaluations.append(eval_policy(policy, args.env, args.seed))
+            evaluations.append(eval_policy(policy, args.env, args.seed, t))
             np.save(f"./results/{file_name}", evaluations)
 
             writer.add_scalar('eval/average_reward', evaluations[-1], (t + 1))

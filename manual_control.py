@@ -67,9 +67,9 @@ def main():
         total_r = 0
         while True:
             s, r, done, info = env.step(force)
-            print(f"env.robot.angle: {env.robot.angle:3f}    state: {s[2]:3f}, {s[3]:3f}    can_kick: {s[4]}")
+            # print(f"env.robot.angle: {env.robot.angle:3f}    state: {s[2]:3f}, {s[3]:3f}    can_kick: {s[4]}")
             total_r += r
-            print("total r: ", total_r)
+            # print("total r: ", total_r)
             is_open = env.render()
             if done or restart:
                 break

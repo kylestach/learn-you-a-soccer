@@ -336,30 +336,30 @@ class RoboCup(gym.Env, EzPickle):
         self.has_touched = False
         self.kicked_ball = False
 
-        scale_factor = 1 / (1 + np.exp(-self.t / 50000 + 3))
+        scale_factor = 1 / (1 + np.exp(-self.t / 5000000 + 3))
         position_scale_factor = scale_factor
 
         # Create the goal, robots, ball and field
         self.state: RoboCupState = self.observation_space.sample_state()
 
         # Robot pose
-        self.state[0] = scale_factor * self.state[0] + (1 - scale_factor) * 1.5
-        self.state[1] = scale_factor * self.state[1]
-        self.state[2] = np.pi + 2 * np.randn() * scale_factor
+        self.state[ROBOT_X] = scale_factor * self.state[ROBOT_X] + (1 - scale_factor) * 1.2
+        self.state[ROBOT_Y] = scale_factor * self.state[ROBOT_Y]
+        self.state[ROBOT_H] = np.pi + 2 * np.random.randn() * scale_factor
 
         # Ball sense
-        self.state[3] = 0
+        self.state[ROBOT_BALLSENSE] = 0
 
         # Robot velocity
-        self.state[4] = scale_factor * self.state[4]
-        self.state[5] = scale_factor * self.state[5]
-        self.state[6] = scale_factor * self.state[6]
+        self.state[ROBOT_DX] = scale_factor * self.state[ROBOT_DX]
+        self.state[ROBOT_DY] = scale_factor * self.state[ROBOT_DY]
+        self.state[ROBOT_DH] = scale_factor * self.state[ROBOT_DH]
 
         # Ball position/velocity
-        self.state[7] *= scale_factor * self.state[7] + (1 - scale_factor) * -1.5
-        self.state[8] *= scale_factor * self.state[8]
-        self.state[9] *= scale_factor * self.state[9] + (1 - scale_factor) * 1.5
-        self.state[10] *= scale_factor * self.state[10]
+        self.state[BALL_X] = scale_factor * self.state[BALL_X] + (1 - scale_factor) * -1
+        self.state[BALL_Y] = scale_factor * self.state[BALL_Y]
+        self.state[BALL_DX] = scale_factor * self.state[BALL_DX] + (1 - scale_factor) * 1.5
+        self.state[BALL_DY] = scale_factor * self.state[BALL_DY]
 
         conf: InitialConditionConfig = self.config.initial_condition_config
 
