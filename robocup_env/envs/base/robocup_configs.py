@@ -10,7 +10,7 @@ class InitialConditionConfig:
             self.fixed_ic = fixed_ic
         else:
             #                         x    y    h    bs   vx   vy   vh    bx   by   bvx  bvy
-            self.fixed_ic = np.array([1.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.5, 0.0])
+            self.fixed_ic = np.array([1.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.5, 0.0])
 
 
 class RobocupBaseConfig:

@@ -82,6 +82,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     # Policy name (collect, score or pass)
     parser.add_argument("--env", default="collect", type=str, choices=["collect", "score", "pass"])
+    parser.add_argument("--scale", type=float, help="Scale factor for IC")
     return parser.parse_args()
 
 
@@ -115,10 +116,11 @@ def main():
     np.set_printoptions(2, linewidth=150, floatmode="fixed", sign=" ", suppress=True)
 
     while is_open:
-        env.reset()
+        env.reset(scale=args.scale)
         restart = False
         total_r = 0
         while True:
+            force = env.action_space.sample()
             s, r, done, info = env.step(force)
             # print(f"env.robot.angle: {env.robot.angle:3f}    state: {s[2]:3f}, {s[3]:3f}    can_kick: {s[4]}")
             # print(s)

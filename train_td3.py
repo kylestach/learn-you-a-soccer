@@ -1,9 +1,11 @@
+import datetime
 import numpy as np
 import torch
 import gym
 import argparse
 import os
 from torch.utils.tensorboard import SummaryWriter
+from utils.schedules import Schedule, LinearSchedule, ConstantSchedule
 
 import utils
 from utils import OrnsteinUhlenbeckActionNoise
@@ -59,13 +61,19 @@ if __name__ == "__main__":
     parser.add_argument("--save_model", default=True, action="store_true")  # Save model and optimizer parameters
     parser.add_argument("--load_model", default="")  # Model load file name, "" doesn't load, "default" uses file_name
     parser.add_argument("--train_every", default=5, type=int)  # How many timesteps to take between training instances
+    parser.add_argument("--print_every", default=10, type=int)  # Print stats for training every X episodes
     parser.add_argument("--log_name", default="default",
                         type=str)  # How many timesteps to take between training instances
     parser.add_argument("--critic_lr", default=3e-4, type=float)  # LR of critic
     parser.add_argument("--actor_lr", default=3e-4, type=float)  # LR of actor
+    parser.add_argument("--curriculum", action='store_true')  # Use curriculum
     args = parser.parse_args()
 
-    file_name = f"{args.policy}_{args.env}_{args.log_name}_{args.seed}"
+    for k, v in vars(args):
+        print(f"{k}: {v}")
+
+    datetime_string = datetime.datetime.today().strftime("%Y-%m-%d_%H:%M:%S")
+    file_name = f"{args.policy}_{args.env}_{datetime_string}_{args.log_name}_{args.seed}"
     print("---------------------------------------")
     print(f"Policy: {args.policy}, Env: {args.env}, Seed: {args.seed}")
     print("---------------------------------------")
@@ -99,7 +107,7 @@ if __name__ == "__main__":
     }
 
     log_dir = "runs"
-    writer = SummaryWriter(f"{log_dir}/{args.env}_{args.log_name}_{args.seed}")
+    writer = SummaryWriter(f"{log_dir}/{args.env}/{datetime_string}/{args.log_name}_{args.seed}")
 
     # Initialize policy
     if args.policy == "TD3":
@@ -121,8 +129,11 @@ if __name__ == "__main__":
 
     replay_buffer = utils.ReplayBuffer(state_dim, action_dim)
 
+    final_scaling = 0.25
+
     # Evaluate untrained policy
-    evaluations = [eval_policy(policy, args.env, args.seed, 0)]
+    curriculum_evaluations = [eval_policy(policy, args.env, args.seed, 0)]
+    final_evaluations = [eval_policy(policy, args.env, args.seed, final_scaling)]
 
     state, done = env.reset(scale=0.0), False
     episode_reward = 0
@@ -132,8 +143,14 @@ if __name__ == "__main__":
     ou = OrnsteinUhlenbeckActionNoise(np.zeros(action_dim), args.expl_noise * np.ones(action_dim))
 
     # Curriculum
-    scheduling_sigmoid_mult = 1/5000000
+    scheduling_sigmoid_mult = 1 / 5000000
     scheduling_sigmoid_shift = 3
+
+    schedule: Schedule
+    if args.curriculum:
+        schedule = LinearSchedule(args.max_timesteps, final_scaling, 0)
+    else:
+        schedule = ConstantSchedule(final_scaling)
 
     for t in range(int(args.max_timesteps)):
 
@@ -141,10 +158,10 @@ if __name__ == "__main__":
 
         # Select action randomly or according to policy
         if t < args.start_timesteps:
-            # action = env.action_space.sample()
-            action = (
-                ou.noise()
-            ).clip(np.array([-1.0, -1.0, -1.0, 0.0]), np.array([1.0, 1.0, 1.0, 1.0]))
+            action = env.action_space.sample()
+            # action = (
+            #     ou.noise()
+            # ).clip(np.array([-1.0, -1.0, -1.0, 0.0]), np.array([1.0, 1.0, 1.0, 1.0]))
         else:
             action = (
                     policy.select_action(np.array(state))
@@ -168,8 +185,9 @@ if __name__ == "__main__":
 
         if done:
             # +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
-            print(
-                f"Total T: {t + 1} Episode Num: {episode_num + 1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
+            if episode_num % args.print_every:
+                print(f"Total T: {t + 1} Episode Num: {episode_num + 1} Episode T: {episode_timesteps} "
+                      f"Reward: {episode_reward:.3f}")
 
             writer.add_scalar('episode/reward', episode_reward, episode_num)
             writer.add_scalar('episode/timesteps', episode_timesteps, episode_num)
@@ -178,7 +196,8 @@ if __name__ == "__main__":
             ou.reset()
 
             # Update scale factor for curriculum learning
-            scale = scale_factor = 1 / (1 + np.exp(episode_num * scheduling_sigmoid_mult + scheduling_sigmoid_shift))
+            scale = schedule.value(t)
+
             state, done = env.reset(scale=scale), False
             episode_reward = 0
             episode_timesteps = 0
@@ -186,10 +205,14 @@ if __name__ == "__main__":
 
         # Evaluate episode
         if (t + 1) % args.eval_freq == 0:
-            evaluations.append(eval_policy(policy, args.env, args.seed, t))
-            np.save(f"./results/{file_name}", evaluations)
+            scale = schedule.value(t)
+            curriculum_evaluations.append(eval_policy(policy, args.env, args.seed, scale=scale))
+            np.save(f"./results/{file_name}_curriculum", curriculum_evaluations)
+            writer.add_scalar('eval/curriculum/average_reward', curriculum_evaluations[-1], (t + 1))
 
-            writer.add_scalar('eval/average_reward', evaluations[-1], (t + 1))
+            final_evaluations.append(eval_policy(policy, args.env, args.seed, scale=final_scaling))
+            np.save(f"./results/{file_name}_final", final_evaluations)
+            writer.add_scalar('eval/final/average_reward', final_evaluations[-1], (t + 1))
 
             if args.save_model:
                 policy.save(f"./models/{file_name}_{t + 1}")

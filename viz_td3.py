@@ -75,6 +75,7 @@ def main():
     parser.add_argument("--load_model", default="")  # Model load file name, "" doesn't load, "default" uses file_name
     parser.add_argument("--filter", default="", type=str)  # Filter for model save files
     parser.add_argument("--scale", default=1.0, type=float)  # What scale to use for curriculum
+    parser.add_argument("--num_per_policy", default=3, type=int)  # How many to viz per policy
     args = parser.parse_args()
 
     use_sincos = False
@@ -105,7 +106,7 @@ def main():
         if timestep != last_timestep:
             print(f"Timestep: {timestep}")
             last_timestep = timestep
-        viz_policy(policy, args.env, args.seed, 3, args.scale)
+        viz_policy(policy, args.env, args.seed, args.num_per_policy, args.scale)
 
 
 if __name__ == "__main__":
