@@ -219,8 +219,6 @@ class RoboCup(gym.Env, EzPickle):
         self.seed()
         self.viewer = None
 
-        self.t = 0
-
         self.world = None
         self.contactListener_keepref = None
 
@@ -307,7 +305,7 @@ class RoboCup(gym.Env, EzPickle):
         self.contactListener_keepref = None
         self.world = None
 
-    def _create(self):
+    def _create(self, scale_factor: float = 1.0):
         self.contactListener_keepref = CollisionDetector(self)
         self.world = Box2D.b2World((0, 0), contactListener=self.contactListener_keepref)
 
@@ -315,7 +313,6 @@ class RoboCup(gym.Env, EzPickle):
         self.kicked_ball = False
 
         conf: InitialConditionConfig = self.config.initial_condition_config
-        scale_factor = 1 / (1 + np.exp(-self.t * conf.scheduling_sigmoid_mult + conf.scheduling_sigmoid_shift))
 
         # Create the goal, robots, ball and field
         self.state: RoboCupState = self.observation_space.sample_state()
@@ -508,20 +505,22 @@ class RoboCup(gym.Env, EzPickle):
 
         return self.state_list(), step_reward, done, {}
 
-    def task_reset(self, t: float = 0):
+    def task_reset(self, scale_factor: float = 0):
         """
         Performs the task specific logic of resetting any additional state
         that it might have
         """
         pass
 
-    def reset(self, t=0):
-        self.t = t
-        # self._destroy()
+    def reset(self, scale: float = 1.0) -> np.ndarray:
+        """ Reset the env, returning the initial state
+        @param scale: How much to scale the IC, for curriculum learning
+        @return:
+        """
         self.ball = None
         self.state = None
         self.robot_bodies = None
-        self._create()  # This sets self.state
+        self._create(scale)  # This sets self.state
 
         self.timestep = 0
 
@@ -529,7 +528,7 @@ class RoboCup(gym.Env, EzPickle):
 
         self.reward = 0.0
         self.prev_reward = 0.0
-        self.task_reset(t)
+        self.task_reset(scale)
 
         return self.state_list()
 

@@ -3,12 +3,9 @@ from typing import Optional
 
 
 class InitialConditionConfig:
-    def __init__(self, fixed_ic: Optional[np.ndarray] = None, enable_scheduled_ic: bool = True,
-                 scheduling_sigmoid_mult: float = 1 / 5000000, scheduling_sigmoid_shift: float = 3.0):
+    def __init__(self, fixed_ic: Optional[np.ndarray] = None, enable_scheduled_ic: bool = True):
         self.enable_scheduled_ic = enable_scheduled_ic
 
-        self.scheduling_sigmoid_mult = scheduling_sigmoid_mult
-        self.scheduling_sigmoid_shift = scheduling_sigmoid_shift
         if fixed_ic:
             self.fixed_ic = fixed_ic
         else:

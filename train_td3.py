@@ -12,13 +12,21 @@ import TD3
 
 # Runs policy for X episodes and returns average reward
 # A fixed seed is used for the eval environment
-def eval_policy(policy, env_name, seed, t, eval_episodes=30):
+def eval_policy(policy, env_name, seed, scale: float, eval_episodes=30) -> float:
+    """ Eval policy, returning average reward
+    @param policy:
+    @param env_name:
+    @param seed:
+    @param scale: Scale used for curriculum. "Difficulty". 0 <= scale <= 1
+    @param eval_episodes:
+    @return:
+    """
     eval_env = gym.make(env_name)
     eval_env.seed(seed + 100)
 
     avg_reward = 0.
     for _ in range(eval_episodes):
-        state, done = eval_env.reset(t=t), False
+        state, done = eval_env.reset(scale=scale), False
         while not done:
             action = policy.select_action(np.array(state))
             state, reward, done, _ = eval_env.step(action)
@@ -116,12 +124,16 @@ if __name__ == "__main__":
     # Evaluate untrained policy
     evaluations = [eval_policy(policy, args.env, args.seed, 0)]
 
-    state, done = env.reset(t=0), False
+    state, done = env.reset(scale=0.0), False
     episode_reward = 0
     episode_timesteps = 0
     episode_num = 0
 
     ou = OrnsteinUhlenbeckActionNoise(np.zeros(action_dim), args.expl_noise * np.ones(action_dim))
+
+    # Curriculum
+    scheduling_sigmoid_mult = 1/5000000
+    scheduling_sigmoid_shift = 3
 
     for t in range(int(args.max_timesteps)):
 
@@ -164,7 +176,10 @@ if __name__ == "__main__":
 
             # Reset environment
             ou.reset()
-            state, done = env.reset(t=t), False
+
+            # Update scale factor for curriculum learning
+            scale = scale_factor = 1 / (1 + np.exp(episode_num * scheduling_sigmoid_mult + scheduling_sigmoid_shift))
+            state, done = env.reset(scale=scale), False
             episode_reward = 0
             episode_timesteps = 0
             episode_num += 1
