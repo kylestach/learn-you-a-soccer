@@ -56,7 +56,7 @@ robot_points = [
     (ROBOT_RADIUS * np.cos(-a), ROBOT_RADIUS * np.sin(-a)) for a in robot_angles
 ]
 
-KICK_THRESHOLD = 0.5
+KICK_THRESHOLD = 0.0
 FRICTION_LINEAR_REGION = 0.1
 
 
@@ -86,7 +86,6 @@ class CollisionDetector(b2ContactListener):
             self.env.has_touched = True
             if self.has_kicker(contact):
                 self.env.dribbling = True
-            elif self.has_kicker(contact):
                 self.env.can_kick = True
 
     def EndContact(self, contact):
@@ -210,7 +209,7 @@ class RoboCupStateSpace(spaces.Space):
 
 class CollectRewardConfig:
     def __init__(self,
-                 dribbling_reward: float = 1.0,
+                 dribbling_reward: float = 0.3,
                  done_reward_additive: float = 0.0,
                  done_reward_coeff: float = 500.0,
                  done_reward_exp_base: float = 0.998,
@@ -336,7 +335,7 @@ class RoboCup(gym.Env, EzPickle):
         self.has_touched = False
         self.kicked_ball = False
 
-        scale_factor = 1 / (1 + np.exp(-self.t / 5000000 + 3))
+        scale_factor = 0.5 / (1 + np.exp(-self.t / 1000000 + 3))
         position_scale_factor = scale_factor
 
         # Create the goal, robots, ball and field
@@ -497,12 +496,13 @@ class RoboCup(gym.Env, EzPickle):
         self.robot.ApplyTorque(self.robot.inertia * 40 * action[2], True)
 
         self.kick_cooldown += 1
-        if self.can_kick and self.kick_cooldown > 30 and (3.0 * action[3]) > KICK_THRESHOLD:
+        if self.can_kick and self.kick_cooldown > 30 and 2.0 * action[3] > KICK_THRESHOLD:
             self.kick_cooldown = 0
-            shoot_magnitude = self.ball.mass * (3.0 * action[3])
+            shoot_magnitude = self.ball.mass * (2.0 * action[3] + 1.0)
             shoot_impulse = [shoot_magnitude * np.cos(self.robot.angle),
                              shoot_magnitude * np.sin(self.robot.angle)]
             self.ball.ApplyLinearImpulse(shoot_impulse, self.robot.worldCenter, True)
+            print("KICK")
             self.kicked_ball = True
 
         if self.dribbling:
@@ -515,7 +515,7 @@ class RoboCup(gym.Env, EzPickle):
             self.dribbling_count += 1
         else:
             self.dribbling_count = 0
-        done_dribbled = self.dribbling_count >= self.config.dribble_count_done
+        # done_dribbled = self.dribbling_count >= self.config.dribble_count_done
         # if self.dribbling_count == self.config.dribble_count_done:
         #     print("Dribbling!")
 
@@ -526,21 +526,20 @@ class RoboCup(gym.Env, EzPickle):
         ball_in_left_goal = (VIEW_MIN_X <= self.ball.position[0] <= FIELD_MIN_X) and (
                 -GOAL_HEIGHT / 2 < self.ball.position[1] < GOAL_HEIGHT / 2)
 
-        # done = ball_in_left_goal and self.kicked_ball
-        done = done_dribbled
+        done = ball_in_left_goal
+        # done = done_dribbled
 
         dist = np.sqrt((self.robot.position[0] - self.ball.position[0]) ** 2 + (
                 self.robot.position[1] - self.ball.position[1]) ** 2)
         if done:
             step_reward = reward_config.done_reward_additive + \
                           reward_config.done_reward_coeff * reward_config.done_reward_exp_base ** self.timestep
-            print(f"Got done reward: {step_reward}")
-        elif self.dribbling and not done_dribbled:
+        elif self.dribbling:# and not done_dribbled:
             step_reward = reward_config.dribbling_reward
         else:
             step_reward = reward_config.distance_to_ball_coeff * dist
 
-        step_reward += reward_config.move_reward * (np.sum(np.array(action)[:2] ** 2) + 3 * action[2] ** 2)
+        step_reward += reward_config.move_reward * (np.sum(np.array(action)[:2] ** 2) + action[2] ** 2)
 
         # ####################################
         # # TRANSFER LEARNING: Tracking ball #

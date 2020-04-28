@@ -39,11 +39,11 @@ if __name__ == "__main__":
     parser.add_argument("--policy", default="TD3")  # Policy name (TD3, DDPG or OurDDPG)
     parser.add_argument("--env", default="robocup_env:robocup-collect-v0")  # OpenAI gym environment name
     parser.add_argument("--seed", default=1, type=int)  # Sets Gym, PyTorch and Numpy seeds
-    parser.add_argument("--start_timesteps", default=25e3, type=int)  # Time steps initial random policy is used
+    parser.add_argument("--start_timesteps", default=5e4, type=int)  # Time steps initial random policy is used
     parser.add_argument("--eval_freq", default=5e4, type=int)  # How often (time steps) we evaluate
     parser.add_argument("--max_timesteps", default=1e8, type=int)  # Max time steps to run environment
     parser.add_argument("--expl_noise", default=0.1)  # Std of Gaussian exploration noise
-    parser.add_argument("--batch_size", default=256, type=int)  # Batch size for both actor and critic
+    parser.add_argument("--batch_size", default=2048, type=int)  # Batch size for both actor and critic
     parser.add_argument("--discount", default=0.99)  # Discount factor
     parser.add_argument("--tau", default=0.005)  # Target network update rate
     parser.add_argument("--policy_noise", default=0.2)  # Noise added to target policy during critic update
@@ -51,7 +51,7 @@ if __name__ == "__main__":
     parser.add_argument("--policy_freq", default=2, type=int)  # Frequency of delayed policy updates
     parser.add_argument("--save_model", default=True, action="store_true")  # Save model and optimizer parameters
     parser.add_argument("--load_model", default="")  # Model load file name, "" doesn't load, "default" uses file_name
-    parser.add_argument("--train_every", default=5, type=int)  # How many timesteps to take between training instances
+    parser.add_argument("--train_every", default=1, type=int)  # How many timesteps to take between training instances
     parser.add_argument("--log_name", default="default",
                         type=str)  # How many timesteps to take between training instances
     args = parser.parse_args()
@@ -99,10 +99,10 @@ if __name__ == "__main__":
         policy = TD3.TD3(**kwargs)
     elif args.policy == "OurDDPG":
         # policy = OurDDPG.DDPG(**kwargs)
-        raise NotImplemented
+        raise NotImplementedError
     elif args.policy == "DDPG":
         # policy = DDPG.DDPG(**kwargs)
-        raise NotImplemented
+        raise NotImplementedError
 
     if args.load_model != "":
         policy_file = file_name if args.load_model == "default" else args.load_model
@@ -118,7 +118,7 @@ if __name__ == "__main__":
     episode_timesteps = 0
     episode_num = 0
 
-    ou = OrnsteinUhlenbeckActionNoise(np.zeros(action_dim), args.expl_noise * np.ones(action_dim))
+    ou = OrnsteinUhlenbeckActionNoise(np.zeros(action_dim), 0.1 * args.expl_noise * np.ones(action_dim))
 
     for t in range(int(args.max_timesteps)):
 
@@ -129,12 +129,12 @@ if __name__ == "__main__":
             # action = env.action_space.sample()
             action = (
                 ou.noise()
-            ).clip(np.array([-1.0, -1.0, -1.0, 0.0]), np.array([1.0, 1.0, 1.0, 1.0]))
+            ).clip(np.array([-1.0, -1.0, -1.0, -1.0]), np.array([1.0, 1.0, 1.0, 1.0]))
         else:
             action = (
                     policy.select_action(np.array(state))
                     + np.random.normal(0, max_action * args.expl_noise, size=action_dim)
-            ).clip(np.array([-1.0, -1.0, -1.0, 0.0]), np.array([1.0, 1.0, 1.0, 1.0]))
+            ).clip(np.array([-1.0, -1.0, -1.0, -1.0]), np.array([1.0, 1.0, 1.0, 1.0]))
 
         # Perform action
         next_state, reward, done, _ = env.step(action)
