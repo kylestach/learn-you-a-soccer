@@ -8,6 +8,7 @@ class ScoreConfig(BaseRewardConfig):
     def __init__(self, dribble_count_done: int = 100, dribbling_reward: float = 1.0, done_reward_additive: float = 0.0,
                  done_reward_coeff: float = 500.0, done_reward_exp_base: float = 0.998,
                  ball_out_of_bounds_reward: float = -100.0, distance_to_ball_coeff: float = -0.1,
+                 survival_reward: float = 0.5,
                  enable_dribble_reward: bool = True, enable_distance_reward: bool = True):
         super().__init__()
         self.dribble_count_done = dribble_count_done
@@ -21,6 +22,7 @@ class ScoreConfig(BaseRewardConfig):
         self.done_reward_exp_base = done_reward_exp_base
 
         self.ball_out_of_bounds_reward = ball_out_of_bounds_reward
+        self.survival_reward = survival_reward
 
         self.distance_to_ball_coeff = distance_to_ball_coeff
 
@@ -53,15 +55,17 @@ class RoboCupScore(RoboCup):
 
         dist = np.sqrt((robot.position[0] - self.ball.position[0]) ** 2 + (
                 robot.position[1] - self.ball.position[1]) ** 2)
+
+        step_reward = config.survival_reward  # Survival reward
         if done:
-            step_reward = config.done_reward_additive + \
-                          config.done_reward_coeff * config.done_reward_exp_base ** self.timestep
+            step_reward += config.done_reward_additive + \
+                           config.done_reward_coeff * config.done_reward_exp_base ** self.timestep
         elif config.enable_dribble_reward and aux_state.dribbling and not done_dribbled:
-            step_reward = config.dribbling_reward
+            step_reward += config.dribbling_reward
         elif config.enable_distance_reward:
-            step_reward = config.distance_to_ball_coeff * dist
+            step_reward += config.distance_to_ball_coeff * dist
         else:
-            step_reward = 0.0
+            step_reward += 0.0
 
         step_reward += config.move_reward * (np.sum(np.array(action)[:2] ** 2) + config.turn_penalty * action[2] ** 2)
 

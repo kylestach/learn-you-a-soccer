@@ -81,7 +81,7 @@ def handle_key_release(k, force: np.ndarray):
 def parse_args():
     parser = argparse.ArgumentParser()
     # Policy name (collect, score or pass)
-    parser.add_argument("--env", default="collect", type=str, choices=["collect", "score", "pass"])
+    parser.add_argument("--env", default="collect", type=str, help="Either collect-v?, score-v?, pass-v?")
     parser.add_argument("--scale", type=float, help="Scale factor for IC")
     return parser.parse_args()
 
@@ -91,14 +91,14 @@ def main():
     args = parse_args()
     robocup_env_name = args.env
 
-    if robocup_env_name == "collect":
+    if "collect" in robocup_env_name:
         force = np.zeros(4)
-    elif robocup_env_name == "score":
+    elif "score" in robocup_env_name:
         force = np.zeros(4)
-    elif robocup_env_name == "pass":
+    elif "pass" in robocup_env_name:
         force = np.zeros(8)
 
-    env = gym.make(f"robocup_env:robocup-{robocup_env_name}-v0")
+    env = gym.make(f"robocup_env:robocup-{robocup_env_name}")
 
     def key_press(k, mod):
         nonlocal restart, force
@@ -120,10 +120,11 @@ def main():
         restart = False
         total_r = 0
         while True:
-            force = env.action_space.sample()
+            # force = env.action_space.sample()
             s, r, done, info = env.step(force)
             # print(f"env.robot.angle: {env.robot.angle:3f}    state: {s[2]:3f}, {s[3]:3f}    can_kick: {s[4]}")
             # print(s)
+            # print(r)
             total_r += r
             is_open = env.render()
             if done or restart:
