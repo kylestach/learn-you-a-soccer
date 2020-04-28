@@ -36,18 +36,21 @@ class RoboCupCollect(RoboCup):
         @type action: np.ndarray Action passed in
         @return: Tuple of (step_reward, done, got_reward)
         """
+        aux_state = self.robot_aux_states[0]
+        robot = self.robot_bodies[0]
+
         config = self.collect_config
-        done_dribbled = self.dribbling_count >= config.dribble_count_done
+        done_dribbled = aux_state.dribbling_count >= config.dribble_count_done
 
         done = done_dribbled
         got_reward = done_dribbled
 
-        dist = np.sqrt((self.robot.position[0] - self.ball.position[0]) ** 2 + (
-                self.robot.position[1] - self.ball.position[1]) ** 2)
+        dist = np.sqrt((robot.position[0] - self.ball.position[0]) ** 2 + (
+                robot.position[1] - self.ball.position[1]) ** 2)
         if done:
             step_reward = config.done_reward_additive + \
                           config.done_reward_coeff * config.done_reward_exp_base ** self.timestep
-        elif self.dribbling and not done_dribbled:
+        elif aux_state.dribbling and not done_dribbled:
             step_reward = config.dribbling_reward
         else:
             step_reward = config.distance_to_ball_coeff * dist
