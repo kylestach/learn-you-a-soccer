@@ -48,7 +48,7 @@ class RoboCupScore(RoboCup):
 
         ball_in_left_goal = (VIEW_MIN_X <= self.ball.position[0] <= FIELD_MIN_X) and (
                 -GOAL_HEIGHT / 2 < self.ball.position[1] < GOAL_HEIGHT / 2)
-        done = ball_in_left_goal
+        done = ball_in_left_goal and aux_state.kicked_ball
         got_reward = done
 
         dist = np.sqrt((robot.position[0] - self.ball.position[0]) ** 2 + (

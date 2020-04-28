@@ -69,7 +69,7 @@ class RoboCupPass(RoboCup):
             # If the other robot is kicked the ball and this robot is dribbling it, then
             # a pass was made
             if aux_state.dribbling and self.last_kick is not None and self.last_kick != i:
-                print(f"{i} is dribbling")
+                # print(f"{i} is dribbling")
                 # The pass must travel at least Config.pass_min_distance units before it is counted
                 # as a pass
                 dx = self.ball.position[0] - self.kick_ballpos[0]

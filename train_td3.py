@@ -3,7 +3,6 @@ import torch
 import gym
 import argparse
 import os
-from robocup_env.envs import RoboCup
 from torch.utils.tensorboard import SummaryWriter
 
 import utils
@@ -54,6 +53,8 @@ if __name__ == "__main__":
     parser.add_argument("--train_every", default=5, type=int)  # How many timesteps to take between training instances
     parser.add_argument("--log_name", default="default",
                         type=str)  # How many timesteps to take between training instances
+    parser.add_argument("--critic_lr", default=3e-4, type=float)  # LR of critic
+    parser.add_argument("--actor_lr", default=3e-4, type=float)  # LR of actor
     args = parser.parse_args()
 
     file_name = f"{args.policy}_{args.env}_{args.log_name}_{args.seed}"
@@ -85,6 +86,8 @@ if __name__ == "__main__":
         "max_action": max_action,
         "discount": args.discount,
         "tau": args.tau,
+        "actor_lr": args.actor_lr,
+        "critic_lr": args.critic_lr,
     }
 
     log_dir = "runs"

@@ -44,7 +44,7 @@ class CollisionDetector(b2ContactListener):
             self.env.has_touched = True
             if self.has_kicker(contact):
                 robot_id = self.get_id(contact)
-                print(f"{robot_id} is dribbling")
+                # print(f"{robot_id} is dribbling")
                 self.env.robot_aux_states[robot_id].dribbling = True
                 self.env.robot_aux_states[robot_id].can_kick = True
 

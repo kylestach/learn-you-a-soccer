@@ -4,7 +4,6 @@ import torch
 import gym
 import argparse
 import os
-from robocup_env.envs import RoboCup
 
 from utils import OrnsteinUhlenbeckActionNoise
 import TD3
@@ -23,10 +22,10 @@ def viz_policy(policy, env_name, seed, eval_episodes=10, t=0) -> float:
         episode_reward = 0
         while not done:
             eval_env.render()
-            # action = policy.select_action(np.array(state))
-            action = eval_env.action_space.sample()
+            action = policy.select_action(np.array(state))
+            # action = eval_env.action_space.sample()
             # action += np.random.normal(0, 0.3, size=4)
-            action += ou_noise.noise()
+            # action += ou_noise.noise()
             state, reward, done, _ = eval_env.step(action)
             episode_reward += reward
         print("episode reward: ", episode_reward)
