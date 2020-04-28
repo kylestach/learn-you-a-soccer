@@ -138,7 +138,7 @@ class RoboCupStateSpace(spaces.Space):
         return np.concatenate([
                                   np.concatenate([
                                       self.pose_space.sample(),
-                                      0.0,
+                                      np.array([0.0]),
                                       self.robot_velocity_space.sample()]) for _ in range(self.num_robots)
                               ] + [
                                   np.concatenate([
