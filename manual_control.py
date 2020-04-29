@@ -124,7 +124,7 @@ def main():
             s, r, done, info = env.step(force)
             # print(f"env.robot.angle: {env.robot.angle:3f}    state: {s[2]:3f}, {s[3]:3f}    can_kick: {s[4]}")
             # print(s)
-            print(r)
+            # print(r)
             total_r += r
             is_open = env.render()
             if done or restart:

@@ -6,9 +6,9 @@ from robocup_env.envs.base.robocup_configs import RobocupBaseConfig, BaseRewardC
 
 class ScoreConfig(BaseRewardConfig):
     def __init__(self, dribble_count_done: int = 100, dribbling_reward: float = 1.0, done_reward_additive: float = 0.0,
-                 done_reward_coeff: float = 500.0, done_reward_exp_base: float = 0.998,
+                 done_reward_coeff: float = 700.0, done_reward_exp_base: float = 0.998,
                  ball_out_of_bounds_reward: float = -100.0, distance_to_ball_coeff: float = -0.1,
-                 survival_reward: float = 1.0,
+                 survival_reward: float = 0.5,
                  enable_dribble_reward: bool = True, enable_distance_reward: bool = True):
         super().__init__()
         self.dribble_count_done = dribble_count_done
