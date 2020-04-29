@@ -1,1 +1,4 @@
-from robocup_env.envs.robocup import RoboCup
+from .collect import RoboCupCollect
+from .score import RoboCupScore
+from .passing import RoboCupPass
+from .versioning import *

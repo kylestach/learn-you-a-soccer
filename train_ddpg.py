@@ -1,4 +1,4 @@
-from robocup_env.envs.robocup import RoboCup
+from robocup_env.envs.base.robocup import RoboCup
 from torch.utils.tensorboard import SummaryWriter
 
 import logging
@@ -9,7 +9,7 @@ import torch
 
 from ddpg import DDPG
 from utils.noise import OrnsteinUhlenbeckActionNoise
-from utils.replay_memory import ReplayMemory, Transition
+from utils.replay_memory import ReplayMemory
 from wrappers.normalized_actions import NormalizedActions
 
 save_dir = "./saved_models"
