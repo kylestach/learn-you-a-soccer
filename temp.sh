@@ -31,7 +31,8 @@ do
  --batch_size 512 \
  --critic_lr 0.0006 \
  --actor_lr 0.0006 \
- --env robocup_env:robocup-score-v0 \
+ --env robocup_env:robocup-score-v1 \
+ --final_scaling 0.25 \
  --log_name "$log_name" \
  --seed $i "${args[@]}"
 done

@@ -21,8 +21,8 @@ def viz_policy(policy, env_name, seed, eval_episodes=10, scale: float = 1.0) -> 
         episode_reward = 0
         while not done:
             eval_env.render()
-            action = policy.select_action(np.array(state))
-            # action = eval_env.action_space.sample()
+            # action = policy.select_action(np.array(state))
+            action = eval_env.action_space.sample()
             # action += np.random.normal(0, 0.3, size=4)
             # action += ou_noise.noise()
             state, reward, done, _ = eval_env.step(action)
@@ -76,10 +76,12 @@ def main():
     parser.add_argument("--filter", default="", type=str)  # Filter for model save files
     parser.add_argument("--scale", default=1.0, type=float)  # What scale to use for curriculum
     parser.add_argument("--num_per_policy", default=3, type=int)  # How many to viz per policy
+    parser.add_argument("--cpu", default=False, action="store_true")  # How many to viz per policy
     args = parser.parse_args()
 
     use_sincos = False
 
+    print(f"args.env: {args.env}")
     env = gym.make(args.env)
 
     # state_dim = 10
@@ -93,6 +95,7 @@ def main():
         "max_action": max_action,
         "discount": args.discount,
         "tau": args.tau,
+        "force_cpu": args.cpu
     }
 
     policy = TD3.TD3(**kwargs)

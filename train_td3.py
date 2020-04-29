@@ -67,9 +67,11 @@ if __name__ == "__main__":
     parser.add_argument("--critic_lr", default=3e-4, type=float)  # LR of critic
     parser.add_argument("--actor_lr", default=3e-4, type=float)  # LR of actor
     parser.add_argument("--curriculum", action='store_true')  # Use curriculum
+    parser.add_argument("--final_scaling", default=1.0, type=float)  # Use curriculum
+    parser.add_argument("--cpu", default=False, action="store_true")  # Force CPU
     args = parser.parse_args()
 
-    for k, v in vars(args):
+    for k, v in vars(args).items():
         print(f"{k}: {v}")
 
     datetime_string = datetime.datetime.today().strftime("%Y-%m-%d_%H:%M:%S")
@@ -115,7 +117,7 @@ if __name__ == "__main__":
         kwargs["policy_noise"] = args.policy_noise * max_action
         kwargs["noise_clip"] = args.noise_clip * max_action
         kwargs["policy_freq"] = args.policy_freq
-        policy = TD3.TD3(**kwargs)
+        policy = TD3.TD3(**kwargs, force_cpu=args.cpu)
     elif args.policy == "OurDDPG":
         # policy = OurDDPG.DDPG(**kwargs)
         raise NotImplemented
@@ -127,11 +129,10 @@ if __name__ == "__main__":
         policy_file = file_name if args.load_model == "default" else args.load_model
         policy.load(f"./models/{policy_file}")
 
-    replay_buffer = utils.ReplayBuffer(state_dim, action_dim)
-
-    final_scaling = 0.25
+    replay_buffer = utils.ReplayBuffer(state_dim, action_dim, force_cpu=args.cpu)
 
     # Evaluate untrained policy
+    final_scaling = args.final_scaling
     curriculum_evaluations = [eval_policy(policy, args.env, args.seed, 0)]
     final_evaluations = [eval_policy(policy, args.env, args.seed, final_scaling)]
 
@@ -185,7 +186,7 @@ if __name__ == "__main__":
 
         if done:
             # +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
-            if episode_num % args.print_every:
+            if episode_num % args.print_every == 0:
                 print(f"Total T: {t + 1} Episode Num: {episode_num + 1} Episode T: {episode_timesteps} "
                       f"Reward: {episode_reward:.3f}")
 
@@ -197,6 +198,7 @@ if __name__ == "__main__":
 
             # Update scale factor for curriculum learning
             scale = schedule.value(t)
+            writer.add_scalar('episode/scale_factor', scale, episode_num)
 
             state, done = env.reset(scale=scale), False
             episode_reward = 0

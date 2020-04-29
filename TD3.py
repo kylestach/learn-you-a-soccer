@@ -3,8 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from utils import ReplayBuffer
 
 
 # Implementation of Twin Delayed Deep Deterministic Policy Gradients (TD3)
@@ -75,13 +74,19 @@ class TD3(object):
             policy_freq=2,
             actor_lr: float = 3e-4,
             critic_lr: float = 3e-4,
+            force_cpu: bool = False
     ):
+        if force_cpu:
+            self.device = torch.device("cpu")
+        else:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"Using device {self.device}")
 
-        self.actor = Actor(state_dim, action_dim, max_action).to(device)
+        self.actor = Actor(state_dim, action_dim, max_action).to(self.device)
         self.actor_target = copy.deepcopy(self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=actor_lr)
 
-        self.critic = Critic(state_dim, action_dim).to(device)
+        self.critic = Critic(state_dim, action_dim).to(self.device)
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=critic_lr)
 
@@ -95,10 +100,10 @@ class TD3(object):
         self.total_it = 0
 
     def select_action(self, state):
-        state = torch.FloatTensor(state.reshape(1, -1)).to(device)
+        state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
         return self.actor(state).cpu().data.numpy().flatten()
 
-    def train(self, replay_buffer, batch_size=100) -> float:
+    def train(self, replay_buffer: ReplayBuffer, batch_size=100) -> float:
         """
         Returns the critic loss
         """
