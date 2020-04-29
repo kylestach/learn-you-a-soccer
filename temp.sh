@@ -2,25 +2,25 @@
 args=()
 if [ "$1" = "0" ]
 then
-  start=0
-  end=2
+  start=11
+  end=12
   args+=( '--curriculum' )
   log_name="linear"
 elif [ "$1" = "1" ]
 then
-  start=2
-  end=4
+  start=13
+  end=14
   args+=( '--curriculum' )
   log_name="linear"
 elif [ "$1" = "2" ]
 then
-  start=0
-  end=2
+  start=11
+  end=12
   log_name="constant"
 elif [ "$1" = "3" ]
 then
-  start=2
-  end=4
+  start=13
+  end=14
   log_name="constant"
 fi
 for ((i=start;i<end;i+=1))

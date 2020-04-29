@@ -524,7 +524,7 @@ class RoboCup(gym.Env, EzPickle):
 
         self.timestep = 0
 
-        self.robot_aux_states = [RobotAuxState() for i in range(self.config.num_robots)]
+        self.robot_aux_states = [RobotAuxState(kick_cooldown=self.config.kick_cooldown+1) for i in range(self.config.num_robots)]
 
         self.reward = 0.0
         self.prev_reward = 0.0
