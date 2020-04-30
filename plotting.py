@@ -12,42 +12,49 @@ x_units = 1e6
 
 def set_plot_defaults() -> None:
     sns.set()
+    sns.set_context("paper")
     plt.rc('font', family='serif')
     # plt.rc('xtick', labelsize='x-small')
     # plt.rc('ytick', labelsize='x-small')
 
 
-def plot_comparison(linear: np.ndarray, constant: np.ndarray, title: str, name: str):
+def plot_comparison(linear_f: np.ndarray, constant_f: np.ndarray, linear_c: np.ndarray,
+                    title: str, name: str):
     """
-    @param linear: (num_linears, num_evals)
-    @param constant: (num_constants, num_evals)
+    @param linear_f: (num_linears, num_evals)
+    @param constant_f: (num_constants, num_evals)
+    @param linear_c: (num_linears, num_evals)
     @param name: Name to use for plot
+    @param title: Title of the plot
     @return:
     """
-    mean_linear = np.mean(linear, axis=0)
-    mean_constant = np.mean(constant, axis=0)
-    quantiles_linear = np.quantile(linear, [0.25, 0.75], axis=0)
-    quantiles_constant = np.quantile(constant, [0.25, 0.75], axis=0)
+    mean_linear_f = np.mean(linear_f, axis=0)
+    mean_constant_f = np.mean(constant_f, axis=0)
+    quantiles_linear_f = np.quantile(linear_f, [0.25, 0.75], axis=0)
+    quantiles_constant_f = np.quantile(constant_f, [0.25, 0.75], axis=0)
+    mean_linear_c = np.mean(linear_c, axis=0)
+    quantiles_linear_c = np.quantile(linear_c, [0.25, 0.75], axis=0)
 
-    num_evals = mean_linear.shape[0]
+    num_evals = mean_linear_f.shape[0]
     xs = np.arange(num_evals) * eval_freq / x_units
 
     alpha = 0.2
 
-    plt.figure(figsize=(8, 4))
-    mean_linear_line, = plt.plot(xs, mean_linear)
-    mean_linear_line.set_label("Linear curriculum")
-    plt.fill_between(xs, quantiles_linear[0], quantiles_linear[1], alpha=alpha)
+    mean_linear_line_f, = plt.plot(xs, mean_linear_f)
+    mean_linear_line_f.set_label("Linear curriculum (out-of-curriculum)")
+    plt.fill_between(xs, quantiles_linear_f[0], quantiles_linear_f[1], alpha=alpha)
 
-    mean_constant_line, = plt.plot(xs, mean_constant)
+    mean_linear_line_c, = plt.plot(xs, mean_linear_c)
+    mean_linear_line_c.set_label("Linear curriculum (in-curriculum)")
+    plt.fill_between(xs, quantiles_linear_c[0], quantiles_linear_c[1], alpha=alpha)
+
+    mean_constant_line, = plt.plot(xs, mean_constant_f)
     mean_constant_line.set_label("No curriculum")
-    plt.fill_between(xs, quantiles_constant[0], quantiles_constant[1], alpha=alpha)
+    plt.fill_between(xs, quantiles_constant_f[0], quantiles_constant_f[1], alpha=alpha)
 
-    plt.title(f'robocup-{title}-v0')
+    plt.gca().set_title(f'robocup-{title}-v0')
     plt.xlabel('Interactions in millions')
     plt.ylabel('Reward')
-    plt.legend(loc="upper left")
-    plt.savefig(f"{plots_dir}/{name}")
 
 
 def create_plots_dir():
@@ -99,18 +106,32 @@ def plot_graphs(env_name: str):
     constant_data_curriculum *= mult2
 
     # Plot finals
-    plot_comparison(linear_data_final, constant_data_final, env_name, f"{env_name}_final_comparison.png")
-
-    # Plot curriculum
-    plot_comparison(linear_data_curriculum, constant_data_curriculum, env_name, f"{env_name}_curriculum_comparison.png")
+    plot_comparison(linear_data_final, constant_data_final, linear_data_curriculum, env_name, f"{env_name}.png")
 
 
 def main():
     set_plot_defaults()
     create_plots_dir()
 
-    for env_name in ["collect", "score", "pass"]:
-        plot_graphs(env_name)
+    plt.figure(figsize=(8, 12), dpi=500)
+    plt.subplot(311)
+    print(f"Plotting collect...")
+    plot_graphs("collect")
+    plt.subplot(312)
+    print(f"Plotting score...")
+    plot_graphs("score")
+    plt.subplot(313)
+    print(f"Plotting pass...")
+    plot_graphs("pass")
+
+    plt.tight_layout()
+    lgd = plt.figlegend(("Linear (out-of-curriculum)", "Linear (in-curriculum)", "No curriculum"),
+                        loc='upper center', borderaxespad=0.,
+                        bbox_to_anchor=(0.5, 0.015),
+                        ncol=3
+                        )
+    plt.savefig(f"{plots_dir}/plots.png", bbox_extra_artists=(lgd,), bbox_inches='tight')
+    # plt.show()
 
 
 if __name__ == '__main__':

@@ -162,7 +162,7 @@ class RoboCupPass(RoboCup):
             if aux_state.kick_cooldown == 0:
                 self.last_kick = i
                 self.kick_ballpos = (self.ball.position[0], self.ball.position[1])
-                print(f"{i} kicked it")
+                # print(f"{i} kicked it")
                 continue
 
         done = passed_ball

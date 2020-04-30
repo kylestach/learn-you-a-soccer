@@ -2,14 +2,14 @@
 args=()
 if [ "$1" = "0" ]
 then
-  start=0
-  end=2
+  start=5
+  end=7
   args+=( '--curriculum' )
   log_name="linear"
 elif [ "$1" = "1" ]
 then
-  start=2
-  end=4
+  start=12
+  end=14
   args+=( '--curriculum' )
   log_name="linear"
 elif [ "$1" = "2" ]
@@ -19,8 +19,8 @@ then
   log_name="constant"
 elif [ "$1" = "3" ]
 then
-  start=2
-  end=4
+  start=12
+  end=14
   log_name="constant"
 fi
 for ((i=start;i<end;i+=1))
@@ -31,7 +31,7 @@ do
  --critic_lr 0.0006 \
  --actor_lr 0.0006 \
  --env robocup_env:robocup-pass-v0 \
- --final_scaling 0.1 \
+ --final_scaling 0.2 \
  --log_name "$log_name" \
  --seed $i "${args[@]}"
 done

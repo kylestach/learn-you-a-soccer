@@ -507,7 +507,11 @@ class RoboCup(gym.Env, EzPickle):
         if got_reward:
             print(f"Got reward! Episode Timestep: {self.timestep:4}, step_reward: {step_reward:6.2e}")
 
-        return self.state_list(), step_reward, done, {}
+        step_dict = {
+            "got_reward": got_reward
+        }
+
+        return self.state_list(), step_reward, done, step_dict
 
     def task_reset(self, scale_factor: float = 0):
         """
