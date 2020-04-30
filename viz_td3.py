@@ -40,10 +40,10 @@ def viz_policy(policy, env_name, seed, eval_episodes=10, scale: float = 1.0) -> 
     return avg_reward
 
 
-def get_latest(filter_str) -> Tuple[str, int]:
+def get_latest(filter_str: str, env: str) -> Tuple[str, int]:
     import re
     models_dir = "./models/"
-    files = [file for file in os.listdir(models_dir) if filter_str in file]
+    files = [file for file in os.listdir(models_dir) if filter_str in file and env in file]
     filepaths = [os.path.join(models_dir, file) for file in files]
     last_file = max(filepaths, key=os.path.getctime)
 
@@ -102,7 +102,7 @@ def main():
 
     last_timestep = 0
     while True:
-        policy_file, timestep = get_latest(args.filter)
+        policy_file, timestep = get_latest(args.filter, args.env)
         print("policy_file: ", policy_file)
         policy.load(policy_file)
 
