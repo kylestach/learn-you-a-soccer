@@ -8,14 +8,14 @@ import os
 from torch.utils.tensorboard import SummaryWriter
 from utils.schedules import Schedule, LinearSchedule, ConstantSchedule
 
-import utils
+from utils import ReplayBuffer
 from utils import OrnsteinUhlenbeckActionNoise
 import TD3
 
 
 # Runs policy for X episodes and returns average reward
 # A fixed seed is used for the eval environment
-def eval_policy(policy, env_name, seed, scale: float, eval_episodes=30) -> Tuple[float, float, float]:
+def eval_policy(policy, env_name, seed, scale: float, eval_episodes=30) -> float:
     """ Eval policy, returning average reward
     @param policy:
     @param env_name:
@@ -29,11 +29,14 @@ def eval_policy(policy, env_name, seed, scale: float, eval_episodes=30) -> Tuple
 
     rewards = []
     for _ in range(eval_episodes):
+        total_reward = 0.0
         state, done = eval_env.reset(scale=scale), False
         while not done:
             action = policy.select_action(np.array(state))
             state, reward, done, _ = eval_env.step(action)
-            rewards.append(reward)
+            total_reward += reward
+
+        rewards.append(total_reward)
 
     avg_reward = sum(rewards) / len(rewards)
     max_reward = max(rewards)
@@ -66,6 +69,7 @@ if __name__ == "__main__":
     parser.add_argument("--load_model", default="")  # Model load file name, "" doesn't load, "default" uses file_name
     parser.add_argument("--train_every", default=5, type=int)  # How many timesteps to take between training instances
     parser.add_argument("--print_every", default=10, type=int)  # Print stats for training every X episodes
+    parser.add_argument("--save_rewards_every", default=100, type=int)  # Save sampling stats every X timesteps
     parser.add_argument("--log_name", default="default",
                         type=str)  # How many timesteps to take between training instances
     parser.add_argument("--critic_lr", default=3e-4, type=float)  # LR of critic
@@ -133,7 +137,7 @@ if __name__ == "__main__":
         policy_file = file_name if args.load_model == "default" else args.load_model
         policy.load(f"./models/{policy_file}")
 
-    replay_buffer = utils.ReplayBuffer(state_dim, action_dim, force_cpu=args.cpu)
+    replay_buffer = ReplayBuffer(state_dim, action_dim, force_cpu=args.cpu)
 
     # Evaluate untrained policy
     final_scaling = args.final_scaling
@@ -157,6 +161,9 @@ if __name__ == "__main__":
     else:
         schedule = ConstantSchedule(final_scaling)
 
+    min_action = env.action_space.low
+    max_action = env.action_space.high
+
     for t in range(int(args.max_timesteps)):
 
         episode_timesteps += 1
@@ -171,7 +178,7 @@ if __name__ == "__main__":
             action = (
                     policy.select_action(np.array(state))
                     + np.random.normal(0, max_action * args.expl_noise, size=action_dim)
-            ).clip(np.array([-1.0, -1.0, -1.0, 0.0]), np.array([1.0, 1.0, 1.0, 1.0]))
+            ).clip(min_action, max_action)
 
         # Perform action
         next_state, reward, done, _ = env.step(action)
@@ -185,8 +192,13 @@ if __name__ == "__main__":
 
         # Train agent after collecting sufficient data
         if t >= args.start_timesteps and (t + 1) % args.train_every == 0:
-            critic_loss = policy.train(replay_buffer, args.batch_size)
+            critic_loss, rewards, q_diff = policy.train(replay_buffer, args.batch_size)
             writer.add_scalar('training/critic_loss', critic_loss, (t + 1))
+            writer.add_scalar('training/avg_sampled_reward', rewards.mean().item(), (t + 1))
+
+            if (t + 1) % args.save_rewards_every == 0:
+                writer.add_histogram('training/sampled_rewards', reward, (t + 1))
+                writer.add_histogram('training/Q_diff', q_diff, (t + 1))
 
         if done:
             # +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
@@ -202,7 +214,7 @@ if __name__ == "__main__":
 
             # Update scale factor for curriculum learning
             scale = schedule.value(t)
-            writer.add_scalar('episode/scale_factor', scale, episode_num)
+            writer.add_scalar('episode/scale_factor', scale, t)
 
             state, done = env.reset(scale=scale), False
             episode_reward = 0

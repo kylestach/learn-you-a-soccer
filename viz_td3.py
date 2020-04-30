@@ -9,24 +9,28 @@ import TD3
 
 
 # Runs policy for X episodes and returns average reward
-def viz_policy(policy, env_name, seed, eval_episodes=10, scale: float = 1.0) -> float:
+def viz_policy(policy, env_name, seed, eval_episodes=10, scale: float = 1.0, render: bool = True) -> float:
     eval_env = gym.make(env_name)
     eval_env.seed(seed + 100)
 
     avg_reward = 0.
     s = 0.1
     ou_noise = OrnsteinUhlenbeckActionNoise(np.zeros(4), np.array([s, s, s, s]))
+    num_successes = 0
     for _ in range(eval_episodes):
         state, done = eval_env.reset(scale=scale), False
         episode_reward = 0
         while not done:
-            eval_env.render()
+            if render:
+                eval_env.render()
             action = policy.select_action(np.array(state))
             # action = eval_env.action_space.sample()
             # action += np.random.normal(0, 0.3, size=4)
             # action += ou_noise.noise()
-            state, reward, done, _ = eval_env.step(action)
+            state, reward, done, d = eval_env.step(action)
             episode_reward += reward
+            if d["got_reward"]:
+                num_successes += 1
         print("episode reward: ", episode_reward)
         ou_noise.reset()
         avg_reward += episode_reward
@@ -35,16 +39,19 @@ def viz_policy(policy, env_name, seed, eval_episodes=10, scale: float = 1.0) -> 
     eval_env.close()
 
     print("---------------------------------------")
-    print(f"Evaluation over {eval_episodes} episodes: {avg_reward:.3f}")
+    print(f"Evaluation over {eval_episodes} episodes: "
+          f"Average Reward: {avg_reward:.3f}    Successes: {num_successes}")
     print("---------------------------------------")
     return avg_reward
 
 
-def get_latest(filter_str) -> Tuple[str, int]:
+def get_latest(filter_str: str, env: str) -> Tuple[str, int]:
     import re
     models_dir = "./models/"
-    files = [file for file in os.listdir(models_dir) if filter_str in file]
+    files = [file for file in os.listdir(models_dir) if filter_str in file and env in file]
     filepaths = [os.path.join(models_dir, file) for file in files]
+    if len(filepaths) == 0:
+        raise Exception(f"Couldn't find any files that matched {filter_str} and {env}")
     last_file = max(filepaths, key=os.path.getctime)
 
     root_re = r"(.*)_(\d+)_(?:actor|critic)(?:_optimizer)?"
@@ -77,6 +84,8 @@ def main():
     parser.add_argument("--scale", default=1.0, type=float)  # What scale to use for curriculum
     parser.add_argument("--num_per_policy", default=3, type=int)  # How many to viz per policy
     parser.add_argument("--cpu", default=False, action="store_true")  # How many to viz per policy
+    parser.add_argument("--no_render", default=False, action="store_true")  # Whether to render or just eval
+    parser.add_argument("--one_shot", default=False, action="store_true")  # Whether to only do it once
     args = parser.parse_args()
 
     use_sincos = False
@@ -101,15 +110,19 @@ def main():
     policy = TD3.TD3(**kwargs)
 
     last_timestep = 0
+    render = not args.no_render
     while True:
-        policy_file, timestep = get_latest(args.filter)
+        policy_file, timestep = get_latest(args.filter, args.env)
         print("policy_file: ", policy_file)
         policy.load(policy_file)
 
         if timestep != last_timestep:
             print(f"Timestep: {timestep}")
             last_timestep = timestep
-        viz_policy(policy, args.env, args.seed, args.num_per_policy, args.scale)
+        viz_policy(policy, args.env, args.seed, args.num_per_policy, args.scale, render)
+
+        if args.one_shot:
+            return
 
 
 if __name__ == "__main__":

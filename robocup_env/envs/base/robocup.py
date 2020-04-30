@@ -305,36 +305,40 @@ class RoboCup(gym.Env, EzPickle):
         self.contactListener_keepref = None
         self.world = None
 
-    def _create(self, scale_factor: float = 1.0):
-        self.contactListener_keepref = CollisionDetector(self)
-        self.world = Box2D.b2World((0, 0), contactListener=self.contactListener_keepref)
-
-        self.has_touched = False
-        self.kicked_ball = False
-
+    def scale_states(self, scale_factor: float):
         conf: InitialConditionConfig = self.config.initial_condition_config
+        for i in range(self.config.num_robots):
+            # Robot pose
+            self.state[getstate(i, ROBOT_X)] = scale_factor * self.state[getstate(i, ROBOT_X)] + (1 - scale_factor) * \
+                                               conf.fixed_ic[getstate(i, ROBOT_X)]
+            self.state[getstate(i, ROBOT_Y)] = scale_factor * self.state[getstate(i, ROBOT_Y)] + (1 - scale_factor) * \
+                                               conf.fixed_ic[getstate(i, ROBOT_Y)]
+            self.state[getstate(i, ROBOT_H)] = conf.fixed_ic[
+                                                   getstate(i, ROBOT_H)] + 2 * np.random.randn() * scale_factor
 
-        # Create the goal, robots, ball and field
-        self.state: RoboCupState = self.observation_space.sample_state()
+            # Ball sense
+            self.state[getstate(i, ROBOT_BALLSENSE)] = 0
 
-        # Robot pose
-        self.state[ROBOT_X] = scale_factor * self.state[ROBOT_X] + (1 - scale_factor) * conf.fixed_ic[ROBOT_X]
-        self.state[ROBOT_Y] = scale_factor * self.state[ROBOT_Y] + (1 - scale_factor) * conf.fixed_ic[ROBOT_Y]
-        self.state[ROBOT_H] = np.pi + 2 * np.random.randn() * scale_factor
-
-        # Ball sense
-        self.state[ROBOT_BALLSENSE] = 0
-
-        # Robot velocity
-        self.state[ROBOT_DX] = scale_factor * self.state[ROBOT_DX] + (1 - scale_factor) * conf.fixed_ic[ROBOT_DX]
-        self.state[ROBOT_DY] = scale_factor * self.state[ROBOT_DY] + (1 - scale_factor) * conf.fixed_ic[ROBOT_DY]
-        self.state[ROBOT_DH] = scale_factor * self.state[ROBOT_DH] + (1 - scale_factor) * conf.fixed_ic[ROBOT_DH]
+            # Robot velocity
+            self.state[getstate(i, ROBOT_DX)] = scale_factor * self.state[getstate(i, ROBOT_DX)] + (1 - scale_factor) * \
+                                                conf.fixed_ic[getstate(i, ROBOT_DX)]
+            self.state[getstate(i, ROBOT_DY)] = scale_factor * self.state[getstate(i, ROBOT_DY)] + (1 - scale_factor) * \
+                                                conf.fixed_ic[getstate(i, ROBOT_DY)]
+            self.state[getstate(i, ROBOT_DH)] = scale_factor * self.state[getstate(i, ROBOT_DH)] + (1 - scale_factor) * \
+                                                conf.fixed_ic[getstate(i, ROBOT_DH)]
 
         # Ball position/velocity
         self.state[BALL_X] = scale_factor * self.state[BALL_X] + (1 - scale_factor) * conf.fixed_ic[BALL_X]
         self.state[BALL_Y] = scale_factor * self.state[BALL_Y] + (1 - scale_factor) * conf.fixed_ic[BALL_Y]
         self.state[BALL_DX] = scale_factor * self.state[BALL_DX] + (1 - scale_factor) * conf.fixed_ic[BALL_DX]
         self.state[BALL_DY] = scale_factor * self.state[BALL_DY] + (1 - scale_factor) * conf.fixed_ic[BALL_DY]
+
+    def _create(self, scale_factor: float = 1.0):
+        self.contactListener_keepref = CollisionDetector(self)
+        self.world = Box2D.b2World((0, 0), contactListener=self.contactListener_keepref)
+
+        self.has_touched = False
+        self.kicked_ball = False
 
         # =========== Ball ====================================================
         self.ball = self.world.CreateDynamicBody(
@@ -503,7 +507,11 @@ class RoboCup(gym.Env, EzPickle):
         if got_reward:
             print(f"Got reward! Episode Timestep: {self.timestep:4}, step_reward: {step_reward:6.2e}")
 
-        return self.state_list(), step_reward, done, {}
+        step_dict = {
+            "got_reward": got_reward
+        }
+
+        return self.state_list(), step_reward, done, step_dict
 
     def task_reset(self, scale_factor: float = 0):
         """
@@ -520,15 +528,20 @@ class RoboCup(gym.Env, EzPickle):
         self.ball = None
         self.state = None
         self.robot_bodies = None
-        self._create(scale)  # This sets self.state
+
+        # Create the goal, robots, ball and field
+        self.state: RoboCupState = self.observation_space.sample_state()
+        self.robot_aux_states = [RobotAuxState(kick_cooldown=self.config.kick_cooldown + 1) for i in
+                                 range(self.config.num_robots)]
+        self.scale_states(scale)
+        self.task_reset(scale)
+
+        self._create(scale)  # Create the box2d bodies
 
         self.timestep = 0
 
-        self.robot_aux_states = [RobotAuxState() for i in range(self.config.num_robots)]
-
         self.reward = 0.0
         self.prev_reward = 0.0
-        self.task_reset(scale)
 
         return self.state_list()
 

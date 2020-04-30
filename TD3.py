@@ -1,5 +1,6 @@
 import copy
 import numpy as np
+from typing import Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -103,7 +104,7 @@ class TD3(object):
         state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
         return self.actor(state).cpu().data.numpy().flatten()
 
-    def train(self, replay_buffer: ReplayBuffer, batch_size=100) -> float:
+    def train(self, replay_buffer: ReplayBuffer, batch_size=100) -> Tuple[float, torch.Tensor, torch.Tensor]:
         """
         Returns the critic loss
         """
@@ -129,6 +130,9 @@ class TD3(object):
 
         # Get current Q estimates
         current_Q1, current_Q2 = self.critic(state, action)
+
+        # Difference between current_Q1 and target_Q (For tensorboard)
+        Q_diff = target_Q - current_Q1
 
         # Compute critic loss
         critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
@@ -156,7 +160,7 @@ class TD3(object):
             for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
-        return float(critic_loss.detach())
+        return float(critic_loss.detach().cpu()), reward.detach().cpu(), Q_diff.detach().cpu()
 
     def save(self, filename):
         torch.save(self.critic.state_dict(), filename + "_critic")

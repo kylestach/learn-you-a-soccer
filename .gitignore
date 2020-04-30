@@ -158,6 +158,8 @@ models
 old_models
 results
 
+plots
+
 # Venv
 venv
 .venv
