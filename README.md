@@ -1,4 +1,4 @@
-# learn-you-a-soccer
+# RoboCup RL Experiments
 Reinforcement learning for RoboCup soccer
 
-Pytorch DDPG implementation taken from [here](https://github.com/MoritzTaylor/ddpg-pytorch).
+Pytorch DDPG implementation borrowed from [here](https://github.com/MoritzTaylor/ddpg-pytorch).
