@@ -4,5 +4,5 @@ gym>=0.15.7
 numpy==1.18.2
 pkg-resources==0.0.0
 pyglet>=1.5.0
-scipy==1.4.1
+scipy==1.10.0
 six==1.14.0
